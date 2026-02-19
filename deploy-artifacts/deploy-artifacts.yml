@@ -1,0 +1,61 @@
+name: Deploy Artifacts
+description: Deploy Spring Security Artifacts
+
+inputs:
+  version:
+    description: "The artifact version to deploy"
+    required: true
+  username:
+    description: "The artifact repository username"
+    required: true
+  password:
+    description: "The artifact repository password"
+    required: true
+  repository-uri:
+    description: "The artifact repository URI (e.g. from compute-artifact-repository)"
+    required: true
+  repository-name:
+    description: "The artifact repository name (e.g. from compute-artifact-repository)"
+    required: true
+  local-repository:
+    description: "The location of the local repository to deploy"
+    required: false
+    default: "build/publications/repos"
+
+runs:
+  using: "composite"
+  steps:
+    - id: branch-name
+      name: Extract Branch Name
+      env:
+        BRANCH: ${{ github.ref_name }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        branch=$BRANCH
+        if [[ "$branch" = "main" ]] ; then
+          branch="${VERSION%.*}.x"
+        fi
+        echo "branch=$branch" >> $GITHUB_OUTPUT
+    - name: Remove Checksums
+      if: ${{ inputs.repository-name == 'central' }}
+      run: |
+        # rm checksums to work around https://github.com/spring-io/central-publish-action/issues/11
+        find -name "*.md5" | xargs rm -f
+        find -name "*.sha*" | xargs rm -f
+    - name: Publish Staged Artifacts to Central
+      if: ${{ inputs.repository-name == 'central' }}
+      uses: spring-io/central-publish-action@v0.3.0
+      with:
+        token-name: ${{ inputs.username }}
+        token: ${{ inputs.password }}
+        dir: ${{ input.local-repository }}
+    - name: Deploy to Artifactory
+      if: ${{ inputs.repository-name != 'central' }}
+      uses: spring-io/artifactory-deploy-action@v0.0.4
+      with:
+        uri: ${{ inputs.repository-uri }}
+        repository: ${{ inputs.repository-name }}
+        build-name: ${{ github.event.repository.name }}-${{ steps.branch-name.outputs.branch }}
+        username: ${{ inputs.username }}
+        password: ${{ inputs.password }}
+        folder: ${{ inputs.local-repository }}
