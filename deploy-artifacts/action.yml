@@ -27,6 +27,7 @@ runs:
   steps:
     - id: branch-name
       name: Extract Branch Name
+      shell: bash
       env:
         BRANCH: ${{ github.ref_name }}
         VERSION: ${{ inputs.version }}
@@ -38,6 +39,7 @@ runs:
         echo "branch=$branch" >> $GITHUB_OUTPUT
     - name: Remove Checksums
       if: ${{ inputs.repository-name == 'central' }}
+      shell: bash
       run: |
         # rm checksums to work around https://github.com/spring-io/central-publish-action/issues/11
         find -name "*.md5" | xargs rm -f
@@ -48,7 +50,7 @@ runs:
       with:
         token-name: ${{ inputs.username }}
         token: ${{ inputs.password }}
-        dir: ${{ input.local-repository }}
+        dir: ${{ inputs.local-repository }}
     - name: Deploy to Artifactory
       if: ${{ inputs.repository-name != 'central' }}
       uses: spring-io/artifactory-deploy-action@v0.0.4
