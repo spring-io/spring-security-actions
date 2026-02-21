@@ -31,7 +31,7 @@ runs:
     - id: check-artifact
       name: Check if Artifact Already Deployed
       continue-on-error: true
-      uses: spring-io/spring-release-actions/check-maven-artifact@v1
+      uses: spring-io/spring-release-actions/check-maven-artifact@main
       with:
         repository-url: ${{ inputs.repository-uri }}/${{ inputs.repository-name }}
         artifact-path: ${{ inputs.artifact-path }}
