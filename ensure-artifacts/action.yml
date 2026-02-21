@@ -1,0 +1,50 @@
+name: Ensure Artifacts
+description: Idempotently deploys Spring Security artifacts, skipping deployment if the artifact is already present
+
+inputs:
+  version:
+    description: "The artifact version to deploy"
+    required: true
+  username:
+    description: "The artifact repository username"
+    required: true
+  password:
+    description: "The artifact repository password"
+    required: true
+  repository-uri:
+    description: "The artifact repository URI (e.g. from compute-artifact-repository)"
+    required: true
+  repository-name:
+    description: "The artifact repository name (e.g. from compute-artifact-repository)"
+    required: true
+  artifact-path:
+    description: "The artifact path in the repository (e.g. org/springframework/security/spring-security-core)"
+    required: true
+  local-repository:
+    description: "The location of the local repository to deploy"
+    required: false
+    default: "build/publications/repos"
+
+runs:
+  using: "composite"
+  steps:
+    - id: check-artifact
+      name: Check if Artifact Already Deployed
+      continue-on-error: true
+      uses: spring-io/spring-release-actions/check-maven-artifact@v1
+      with:
+        repository-url: ${{ inputs.repository-uri }}/${{ inputs.repository-name }}
+        artifact-path: ${{ inputs.artifact-path }}
+        version: ${{ inputs.version }}
+        repository-username: ${{ inputs.username }}
+        repository-password: ${{ inputs.password }}
+    - name: Deploy Artifacts
+      if: ${{ steps.check-artifact.outputs.found != 'true' }}
+      uses: ./deploy-artifacts
+      with:
+        version: ${{ inputs.version }}
+        username: ${{ inputs.username }}
+        password: ${{ inputs.password }}
+        repository-uri: ${{ inputs.repository-uri }}
+        repository-name: ${{ inputs.repository-name }}
+        local-repository: ${{ inputs.local-repository }}
