@@ -28,11 +28,18 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - id: get-ref
+      name: Resolve action ref
+      env:
+        # In a step with no nested action, action_ref is this composite action's ref (e.g. v1). Expose via env per GitHub docs.
+        ACTION_REF: ${{ github.action_ref }}
+      shell: bash
+      run: echo "ref=${ACTION_REF:-main}" >> "$GITHUB_OUTPUT"
     - name: Checkout spring-security-actions
       uses: actions/checkout@v4
       with:
         repository: spring-io/spring-security-actions
-        ref: ${{ github.action_ref || 'main' }}
+        ref: ${{ steps.get-ref.outputs.ref }}
         path: spring-security-actions
     - id: check-artifact
       name: Check if Artifact Already Deployed
