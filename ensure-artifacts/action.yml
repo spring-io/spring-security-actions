@@ -28,6 +28,12 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Checkout spring-security-actions
+      uses: actions/checkout@v4
+      with:
+        repository: spring-io/spring-security-actions
+        ref: ${{ github.action_ref || 'main' }}
+        path: spring-security-actions
     - id: check-artifact
       name: Check if Artifact Already Deployed
       if: ${{ !endsWith(inputs.version, '-SNAPSHOT') }}
@@ -41,7 +47,7 @@ runs:
         repository-password: ${{ inputs.password }}
     - name: Deploy Artifacts
       if: ${{ steps.check-artifact.outputs.found != 'true' }}
-      uses: ./deploy-artifacts
+      uses: spring-security-actions/deploy-artifacts
       with:
         version: ${{ inputs.version }}
         username: ${{ inputs.username }}
