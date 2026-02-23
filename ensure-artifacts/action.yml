@@ -47,7 +47,7 @@ runs:
         repository-password: ${{ inputs.password }}
     - name: Deploy Artifacts
       if: ${{ steps.check-artifact.outputs.found != 'true' }}
-      uses: spring-security-actions/deploy-artifacts
+      uses: ./spring-security-actions/deploy-artifacts
       with:
         version: ${{ inputs.version }}
         username: ${{ inputs.username }}
