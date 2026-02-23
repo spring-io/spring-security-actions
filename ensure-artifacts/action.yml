@@ -30,6 +30,7 @@ runs:
   steps:
     - id: check-artifact
       name: Check if Artifact Already Deployed
+      if: ${{ !endsWith(inputs.version, '-SNAPSHOT') }}
       continue-on-error: true
       uses: spring-io/spring-release-actions/check-maven-artifact@main
       with:
