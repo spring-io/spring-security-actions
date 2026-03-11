@@ -24,28 +24,25 @@ inputs:
     description: "The location of the local repository to deploy"
     required: false
     default: "build/publications/repos"
+  ref:
+    description: "Ref of spring-security-actions to checkout (defaults to the ref used to invoke this action, e.g. v1)"
+    required: false
+    default: ${{ github.action_ref }}
 
 runs:
   using: "composite"
   steps:
-    - id: get-ref
-      name: Resolve action ref
-      env:
-        # In a step with no nested action, action_ref is this composite action's ref (e.g. v1). Expose via env per GitHub docs.
-        ACTION_REF: ${{ github.action_ref }}
-      shell: bash
-      run: echo "ref=${ACTION_REF:-main}" >> "$GITHUB_OUTPUT"
     - name: Checkout spring-security-actions
-      uses: actions/checkout@v4
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       with:
         repository: spring-io/spring-security-actions
-        ref: ${{ steps.get-ref.outputs.ref }}
+        ref: ${{ inputs.ref }}
         path: spring-security-actions
     - id: check-artifact
       name: Check if Artifact Already Deployed
       if: ${{ !endsWith(inputs.version, '-SNAPSHOT') }}
       continue-on-error: true
-      uses: spring-io/spring-release-actions/check-maven-artifact@main
+      uses: spring-io/spring-release-actions/check-maven-artifact@708379dd0580adcd6dddf4e3754c8accec4801d4  # 0.0.3
       with:
         repository-url: ${{ inputs.repository-uri }}/${{ inputs.repository-name }}
         artifact-path: ${{ inputs.artifact-path }}

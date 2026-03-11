@@ -46,14 +46,14 @@ runs:
         find -name "*.sha*" | xargs rm -f
     - name: Publish Staged Artifacts to Central
       if: ${{ inputs.repository-name == 'maven2' }}
-      uses: spring-io/central-publish-action@v0.3.0
+      uses: spring-io/central-publish-action@5ea05c77127404d89c374ac4cd17b6ec6b0e7293  # v0.4.0
       with:
         token-name: ${{ inputs.username }}
         token: ${{ inputs.password }}
         dir: ${{ inputs.local-repository }}
     - name: Deploy to Artifactory
       if: ${{ inputs.repository-name != 'maven2' }}
-      uses: spring-io/artifactory-deploy-action@v0.0.4
+      uses: spring-io/artifactory-deploy-action@926d7f7cc810569395346bf3a4d91b380b3e355b  # v0.0.4
       with:
         uri: ${{ inputs.repository-uri }}
         repository: ${{ inputs.repository-name }}
