@@ -61,3 +61,4 @@ runs:
         username: ${{ inputs.username }}
         password: ${{ inputs.password }}
         folder: ${{ inputs.local-repository }}
+        project: spring
