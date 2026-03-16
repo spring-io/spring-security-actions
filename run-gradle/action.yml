@@ -1,0 +1,50 @@
+name: "run-gradle"
+description: "Run a Gradle Command"
+author: "jzheaux"
+
+inputs:
+  gradle-args:
+    description: "Gradle arguments"
+    required: true
+  java-version:
+    description: "The Java version to use"
+    required: false
+    default: "17"
+  distribution:
+    description: "The Java distribution to use"
+    required: false
+  artifact-repository-url:
+    description: "The artifact repository to use to resolve artifacts; uses the project's declared repos by default"
+    required: false
+  artifact-repository-username:
+    description: "The artifact repository username; requires artifact-repository-url to be set"
+    required: false
+  artifact-repository-password:
+    description: "The artifact repository password; requires artifact-repository-url and -username to be set"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up JDK ${{ inputs.java-version }}
+      uses: spring-io/spring-gradle-build-action@d04d4bbff8483caf5c3c87f9a915b00e397060c4  # v2
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: ${{ inputs.distribution }}
+
+    - name: Configure artifact repository
+      if: inputs.artifact-repository-url != ''
+      shell: bash
+      run: |
+        mkdir -p "$HOME/.gradle"
+        cp "$GITHUB_ACTION_PATH/init.gradle" "$HOME/.gradle/init.gradle"
+
+    - name: Run with Gradle
+      shell: bash
+      env:
+        ARTIFACT_REPOSITORY_URL: ${{ inputs.artifact-repository-url }}
+        ARTIFACT_REPOSITORY_USERNAME: ${{ inputs.artifact-repository-username }}
+        ARTIFACT_REPOSITORY_PASSWORD: ${{ inputs.artifact-repository-password }}
+        GRADLE_ARGS: ${{ inputs.gradle-args }}
+      run: |
+        ./gradlew $GRADLE_ARGS
