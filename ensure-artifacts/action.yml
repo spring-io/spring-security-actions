@@ -24,6 +24,10 @@ inputs:
     description: "The location of the local repository to deploy"
     required: false
     default: "build/publications/repos"
+  project:
+    description: "The project key for the artifact repository, or empty when no project applies"
+    required: false
+    default: ""
   ref:
     description: "Ref of spring-security-actions to checkout (defaults to the ref used to invoke this action, e.g. v1)"
     required: false
@@ -59,3 +63,4 @@ runs:
         repository-uri: ${{ inputs.repository-uri }}
         repository-name: ${{ inputs.repository-name }}
         local-repository: ${{ inputs.local-repository }}
+        project: ${{ inputs.project }}

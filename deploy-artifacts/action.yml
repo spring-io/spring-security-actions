@@ -21,6 +21,10 @@ inputs:
     description: "The location of the local repository to deploy"
     required: false
     default: "build/publications/repos"
+  project:
+    description: "The project key for the artifact repository, or empty when no project applies"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -61,4 +65,4 @@ runs:
         username: ${{ inputs.username }}
         password: ${{ inputs.password }}
         folder: ${{ inputs.local-repository }}
-        project: spring
+        project: ${{ inputs.project }}
