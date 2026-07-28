@@ -1,0 +1,28 @@
+name: "test"
+description: "Test the project against snapshot versions of upstream dependencies"
+author: "jzheaux"
+
+inputs:
+  java-version:
+    description: "The Java version to use"
+    required: false
+    default: "17"
+  gradle-args:
+    description: "Gradle arguments identifying which snapshot dependencies to test against, e.g. -PspringFrameworkVersion=7.+"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up JDK ${{ inputs.java-version }}
+      uses: spring-io/spring-gradle-build-action@c8668747d7c264864c8c7f7026d0d277d14a78dc  # v2.0.6
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: "temurin"
+
+    - name: Test with Gradle
+      shell: bash
+      env:
+        GRADLE_ARGS: ${{ inputs.gradle-args }}
+      run: |
+        ./gradlew --refresh-dependencies -PforceMavenRepositories=snapshot $GRADLE_ARGS --stacktrace
