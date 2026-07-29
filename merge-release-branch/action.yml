@@ -1,0 +1,50 @@
+name: Merge Release Branch
+description: Idempotently merges a release tag into its generation branch using the 'ours' strategy, then deletes the corresponding release branch
+
+inputs:
+  tag:
+    description: "The release tag that was just published (e.g. 3.3.9)"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      with:
+        fetch-depth: 0
+    - name: Configure Git
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+    - id: target-branch
+      name: Compute Target Branch
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+      run: |
+        echo "branch=${TAG%.*}.x" >> "$GITHUB_OUTPUT"
+    - name: Merge Tag into Target Branch
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+        TARGET_BRANCH: ${{ steps.target-branch.outputs.branch }}
+      run: |
+        git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+        if git merge-base --is-ancestor "refs/tags/$TAG" "$TARGET_BRANCH"; then
+          echo "Tag $TAG is already merged into $TARGET_BRANCH; skipping merge"
+        else
+          git merge --no-ff "refs/tags/$TAG" -s ours -m "Merge tag '$TAG' into $TARGET_BRANCH"
+          git push origin "$TARGET_BRANCH"
+        fi
+    - name: Delete Release Branch
+      shell: bash
+      env:
+        RELEASE_BRANCH: release/${{ inputs.tag }}
+      run: |
+        if git ls-remote --exit-code --heads origin "$RELEASE_BRANCH" > /dev/null; then
+          echo "Deleting release branch $RELEASE_BRANCH"
+          git push origin --delete "$RELEASE_BRANCH"
+        else
+          echo "Release branch $RELEASE_BRANCH does not exist; nothing to delete"
+        fi

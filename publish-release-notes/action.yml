@@ -1,0 +1,25 @@
+name: Publish Release Notes
+description: Generates a changelog for a release milestone and publishes it as a GitHub release
+
+inputs:
+  tag:
+    description: "The release tag/milestone to generate and publish notes for (e.g. 3.3.9)"
+    required: true
+  config-file:
+    description: "Path to the github-changelog-generator config file"
+    required: false
+    default: "scripts/release/release-notes-sections.yml"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate Changelog
+      uses: spring-io/github-changelog-generator@f7d7a87a3e7c627ecb8c26cf086c38ac5a939721  # v0.0.14
+      with:
+        milestone: ${{ inputs.tag }}
+        token: ${{ github.token }}
+        config-file: ${{ inputs.config-file }}
+    - name: Publish Release Notes
+      uses: spring-io/spring-release-actions/publish-release-notes@a1f321783a0769dd2aea4fad6c2ae2f95a52b885  # 0.0.5
+      with:
+        tag: ${{ inputs.tag }}
