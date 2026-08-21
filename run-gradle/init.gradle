@@ -1,23 +1,15 @@
-apply plugin: SpringEnterpriseRepositoryPlugin
-
-class SpringEnterpriseRepositoryPlugin implements Plugin<Gradle> {
-    void apply(Gradle gradle) {
-        gradle.allprojects { project ->
-            project.repositories {
-                // add the Spring enterprise repository
-                maven {
-                    name "ARTIFACT_REPO"
-                    url "${System.getenv('ARTIFACT_REPOSITORY_URL')}"
-
-                    credentials {
-                      username "${System.getenv('ARTIFACT_REPOSITORY_USERNAME')}"
-                      password "${System.getenv('ARTIFACT_REPOSITORY_PASSWORD')}"
-                    }
-                    authentication {
-                      basic(BasicAuthentication)
-                    }
-                }
-            }
-        }
-    }
+allprojects {
+	repositories {
+		if (project.hasProperty("artifactoryUsername") && project.hasProperty("artifactoryPassword")
+				&& project.artifactoryUsername && project.artifactoryPassword) {
+			maven {
+				name "spring-commercial-release"
+				url "https://repo.spring.io/artifactory/spring-commercial-release-remote"
+				credentials {
+					username project.artifactoryUsername
+					password project.artifactoryPassword
+				}
+			}
+		}
+	}
 }

@@ -16,8 +16,7 @@ runs:
       with:
         java-version: ${{ inputs.java-version }}
         distribution: "temurin"
-
     - name: Build with Gradle
-      shell: bash
-      run: |
-        ./gradlew build publishAllPublicationsToLocalRepository --continue
+      uses: spring-io/spring-security-actions/run-gradle@${{ github.action_ref }}
+      with:
+        gradle-args: build publishAllPublicationsToLocalRepository --continue

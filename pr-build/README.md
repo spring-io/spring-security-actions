@@ -22,8 +22,8 @@ A reusable composite action that sets up a JDK and builds a pull request. Unlike
 - name: Build Pull Request
   uses: spring-io/spring-security-actions/pr-build@v1
   env:
-    COMMERCIAL_REPO_USERNAME: ${{ secrets.COMMERCIAL_ARTIFACTORY_USERNAME }}
-    COMMERCIAL_REPO_PASSWORD: ${{ secrets.COMMERCIAL_ARTIFACTORY_PASSWORD }}
+    ORG_GRADLE_PROJECT_artifactoryUsername: ${{ secrets.COMMERCIAL_ARTIFACTORY_USERNAME }}
+    ORG_GRADLE_PROJECT_artifactoryPassword: ${{ secrets.COMMERCIAL_ARTIFACTORY_PASSWORD }}
     DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 ```
 

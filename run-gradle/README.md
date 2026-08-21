@@ -1,10 +1,11 @@
 # run-gradle
 
-A reusable composite action that sets up a JDK, optionally configures an artifact repository, and runs a Gradle command.
+A reusable composite action that runs a Gradle command, installing an `init.gradle` beforehand that makes the Spring commercial release repository available to every project.
 
 ## Caller contract
 
 - The workflow **must** run `actions/checkout` before using this action so the repository is present on the runner.
+- The workflow **must** set up a JDK before using this action; this action does not install a JDK.
 - The repository **must** contain a Gradle wrapper (`gradlew` and `gradle/wrapper`); this action does not install Gradle.
 
 ## Inputs
@@ -12,31 +13,31 @@ A reusable composite action that sets up a JDK, optionally configures an artifac
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `gradle-args` | Yes | — | Gradle arguments. Passed as a single string and split on spaces (e.g. `"build test"` runs `./gradlew build test`). Arguments that contain spaces cannot be expressed with the current design. |
-| `java-version` | No | `17` | The Java version to use. |
-| `distribution` | No | — | The Java distribution to use (e.g. `temurin`). |
-| `artifact-repository-url` | No | — | The artifact repository URL to use to resolve artifacts; uses the project's declared repos when not set. |
-| `artifact-repository-username` | No | — | The artifact repository username; requires `artifact-repository-url` to be set. |
-| `artifact-repository-password` | No | — | The artifact repository password; requires `artifact-repository-url` and `-username` to be set. |
 
 ## Artifact repository
 
-When `artifact-repository-url` is set, the action installs an `init.gradle` that adds that Maven repository to all projects. For **authenticated** repos you must also set `artifact-repository-username` and `artifact-repository-password`. If you omit them, the repo is still added with empty credentials, which may work for public repos or fail for private ones.
+The action always installs an `init.gradle` into `~/.gradle/init.d` that conditionally adds the `spring-commercial-release` Maven repository (`https://repo.spring.io/artifactory/spring-commercial-release-remote`) to every project. The repository is only added when the Gradle project properties `artifactoryUsername` and `artifactoryPassword` are both set — e.g. via the `ORG_GRADLE_PROJECT_artifactoryUsername`/`ORG_GRADLE_PROJECT_artifactoryPassword` environment variable convention. If neither is set, the init script is a no-op.
 
 ## Example
 
 ```yaml
 - uses: actions/checkout@v4
 
+- uses: actions/setup-java@v4
+  with:
+    java-version: "17"
+    distribution: "temurin"
+
 - name: Build and test
   uses: spring-io/spring-security-actions/run-gradle@v1
   with:
     gradle-args: "build test"
 
-- name: Publish with custom repo
+- name: Publish, resolving from the commercial repo
   uses: spring-io/spring-security-actions/run-gradle@v1
   with:
     gradle-args: "publishAllPublicationsToLocalRepository"
-    artifact-repository-url: ${{ steps.repo.outputs.uri }}
-    artifact-repository-username: ${{ secrets.REPO_USERNAME }}
-    artifact-repository-password: ${{ secrets.REPO_PASSWORD }}
+  env:
+    ORG_GRADLE_PROJECT_artifactoryUsername: ${{ secrets.COMMERCIAL_ARTIFACTORY_USERNAME }}
+    ORG_GRADLE_PROJECT_artifactoryPassword: ${{ secrets.COMMERCIAL_ARTIFACTORY_PASSWORD }}
 ```
