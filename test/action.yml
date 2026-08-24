@@ -20,6 +20,6 @@ runs:
         java-version: ${{ inputs.java-version }}
         distribution: "temurin"
     - name: Test with Gradle
-      uses: spring-io/spring-security-actions/run-gradle@${{ github.action_ref }}
+      uses: $/run-gradle
       with:
         gradle-args: --refresh-dependencies -PforceMavenRepositories=snapshot ${{ inputs.gradle-args }} --stacktrace

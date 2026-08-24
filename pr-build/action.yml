@@ -17,6 +17,6 @@ runs:
         java-version: ${{ inputs.java-version }}
         distribution: "temurin"
     - name: Build with Gradle
-      uses: spring-io/spring-security-actions/run-gradle@${{ github.action_ref }}
+      uses: $/run-gradle
       with:
         gradle-args: clean build -PskipCheckExpectedBranchVersion=true --continue
