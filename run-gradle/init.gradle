@@ -1,4 +1,4 @@
-subprojects {
+allprojects {
 	repositories {
 		mavenCentral()
 		def repoUsername = project.findProperty("artifactoryUsername") ?: System.getenv("COMMERCIAL_REPO_USERNAME")
