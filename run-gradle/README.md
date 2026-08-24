@@ -16,7 +16,12 @@ A reusable composite action that runs a Gradle command, installing an `init.grad
 
 ## Artifact repository
 
-The action always installs an `init.gradle` into `~/.gradle/init.d` that conditionally adds the `spring-commercial-release` Maven repository (`https://repo.spring.io/artifactory/spring-commercial-release-remote`) to every project. The repository is only added when the Gradle project properties `artifactoryUsername` and `artifactoryPassword` are both set — e.g. via the `ORG_GRADLE_PROJECT_artifactoryUsername`/`ORG_GRADLE_PROJECT_artifactoryPassword` environment variable convention. If neither is set, the init script is a no-op.
+The action always installs an `init.gradle` into `~/.gradle/init.d` that adds `mavenCentral()` and conditionally adds the Spring commercial Maven repositories to every subproject:
+
+- `spring-commercial-release` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-prod-local`) — added whenever credentials are present.
+- `spring-commercial-snapshot` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-dev-local`) — added additionally when the project version ends in `-SNAPSHOT`.
+
+Credentials come from the Gradle project properties `artifactoryUsername`/`artifactoryPassword` — e.g. via the `ORG_GRADLE_PROJECT_artifactoryUsername`/`ORG_GRADLE_PROJECT_artifactoryPassword` environment variable convention — falling back to the `COMMERCIAL_REPO_USERNAME`/`COMMERCIAL_REPO_PASSWORD` environment variables. If neither username nor password is set, the commercial repositories are skipped.
 
 ## Example
 
