@@ -20,6 +20,6 @@ runs:
         token: ${{ github.token }}
         config-file: ${{ inputs.config-file }}
     - name: Publish Release Notes
-      uses: spring-io/spring-release-actions/publish-release-notes@a1f321783a0769dd2aea4fad6c2ae2f95a52b885  # 0.0.5
+      uses: spring-io/spring-release-actions/publish-release-notes@1b8671612c3eb3d9b9763e2d7b66f1a80d00ee95  # 0.0.6
       with:
         tag: ${{ inputs.tag }}
