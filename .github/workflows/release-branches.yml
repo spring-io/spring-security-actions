@@ -60,7 +60,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Read the version
         id: version
-        uses: spring-io/spring-release-actions/compute-version@1b8671612c3eb3d9b9763e2d7b66f1a80d00ee95 # 0.0.6
+        uses: spring-io/spring-release-actions/compute-version@3f7412aeec60ad13127b2a536a1b19a2803a5b81 # 0.0.8
       - name: Decide what to build
         id: plan
         uses: spring-io/spring-security-actions/plan-release-branches@2a3eb91b5fb2ad8c5fe3af780292cc7fd4459d99 # 0.0.6
