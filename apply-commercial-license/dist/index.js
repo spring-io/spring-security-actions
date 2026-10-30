@@ -32046,6 +32046,18 @@ function writableLicense(directory, target) {
 }
 
 /** The text of a file, and the encoding that it has: .properties files can be ISO-8859-1. */
+/** The content of a file, or undefined if there is no such file. */
+function readIfExists(file, encoding) {
+  try {
+    return external_node_fs_namespaceObject.readFileSync(file, encoding);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 function readText(full) {
   const raw = external_node_fs_namespaceObject.readFileSync(full);
   try {
@@ -32083,10 +32095,8 @@ function applyPomLicense(directory, scriptFile, log) {
   const changed = [];
   const script = external_node_fs_namespaceObject.readFileSync(scriptFile);
   const scriptPath = external_node_path_namespaceObject.join(directory, LICENSE_SCRIPT);
-  if (
-    !external_node_fs_namespaceObject.existsSync(scriptPath) ||
-    !external_node_fs_namespaceObject.readFileSync(scriptPath).equals(script)
-  ) {
+  const existingScript = readIfExists(scriptPath);
+  if (existingScript === undefined || !existingScript.equals(script)) {
     external_node_fs_namespaceObject.mkdirSync(external_node_path_namespaceObject.dirname(scriptPath), { recursive: true });
     external_node_fs_namespaceObject.writeFileSync(scriptPath, script);
     changed.push(LICENSE_SCRIPT);
@@ -32198,8 +32208,9 @@ function applyCommercialLicense({
 
   const full = external_node_path_namespaceObject.join(directory, target);
   const license = external_node_fs_namespaceObject.readFileSync(licenseFile);
-  const had = external_node_fs_namespaceObject.existsSync(full);
-  if (!had || !external_node_fs_namespaceObject.readFileSync(full).equals(license)) {
+  const existing = readIfExists(full);
+  const had = existing !== undefined;
+  if (!had || !existing.equals(license)) {
     external_node_fs_namespaceObject.mkdirSync(external_node_path_namespaceObject.dirname(full), { recursive: true });
     external_node_fs_namespaceObject.writeFileSync(full, license);
     changed.push(target);
@@ -32208,9 +32219,12 @@ function applyCommercialLicense({
 
   // The checkstyle header is only written if the project has one: not every project
   // checks the headers (Spring Security Kerberos does not).
-  if (canonical && external_node_fs_namespaceObject.existsSync(checkstyleFile)) {
+  const checkstyle = canonical
+    ? readIfExists(checkstyleFile, "utf8")
+    : undefined;
+  if (checkstyle !== undefined) {
     const header = checkstyleHeader(canonical);
-    if (external_node_fs_namespaceObject.readFileSync(checkstyleFile, "utf8") !== header) {
+    if (checkstyle !== header) {
       external_node_fs_namespaceObject.writeFileSync(checkstyleFile, header);
       changed.push(CHECKSTYLE_HEADER);
       log(

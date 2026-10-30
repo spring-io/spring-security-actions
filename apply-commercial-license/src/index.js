@@ -118,6 +118,18 @@ function writableLicense(directory, target) {
 }
 
 /** The text of a file, and the encoding that it has: .properties files can be ISO-8859-1. */
+/** The content of a file, or undefined if there is no such file. */
+function readIfExists(file, encoding) {
+  try {
+    return fs.readFileSync(file, encoding);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 function readText(full) {
   const raw = fs.readFileSync(full);
   try {
@@ -155,10 +167,8 @@ function applyPomLicense(directory, scriptFile, log) {
   const changed = [];
   const script = fs.readFileSync(scriptFile);
   const scriptPath = path.join(directory, LICENSE_SCRIPT);
-  if (
-    !fs.existsSync(scriptPath) ||
-    !fs.readFileSync(scriptPath).equals(script)
-  ) {
+  const existingScript = readIfExists(scriptPath);
+  if (existingScript === undefined || !existingScript.equals(script)) {
     fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
     fs.writeFileSync(scriptPath, script);
     changed.push(LICENSE_SCRIPT);
@@ -270,8 +280,9 @@ export function applyCommercialLicense({
 
   const full = path.join(directory, target);
   const license = fs.readFileSync(licenseFile);
-  const had = fs.existsSync(full);
-  if (!had || !fs.readFileSync(full).equals(license)) {
+  const existing = readIfExists(full);
+  const had = existing !== undefined;
+  if (!had || !existing.equals(license)) {
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, license);
     changed.push(target);
@@ -280,9 +291,12 @@ export function applyCommercialLicense({
 
   // The checkstyle header is only written if the project has one: not every project
   // checks the headers (Spring Security Kerberos does not).
-  if (canonical && fs.existsSync(checkstyleFile)) {
+  const checkstyle = canonical
+    ? readIfExists(checkstyleFile, "utf8")
+    : undefined;
+  if (checkstyle !== undefined) {
     const header = checkstyleHeader(canonical);
-    if (fs.readFileSync(checkstyleFile, "utf8") !== header) {
+    if (checkstyle !== header) {
       fs.writeFileSync(checkstyleFile, header);
       changed.push(CHECKSTYLE_HEADER);
       log(

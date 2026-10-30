@@ -31773,6 +31773,18 @@ function setVersion(text, name, value) {
 
 
 
+/** The content of a file, or undefined if there is no such file. */
+function readIfExists(file, encoding) {
+  try {
+    return external_node_fs_namespaceObject.readFileSync(file, encoding);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 /**
  * The message of the commit of one update. It is not an input: every update reads the
  * same, so that the history of a catalog is the same everywhere.
@@ -31848,7 +31860,8 @@ function updateVersions({
 }) {
   const updates = updatesOf(changes, requireIssue);
   const file = external_node_path_namespaceObject.resolve(directory, tomlPath);
-  if (!external_node_fs_namespaceObject.existsSync(file)) {
+  const catalog = readIfExists(file, "utf8");
+  if (catalog === undefined) {
     throw new Error(`The version catalog does not exist: ${file}`);
   }
   const relative = external_node_path_namespaceObject.relative(external_node_path_namespaceObject.resolve(directory), file);
@@ -31858,7 +31871,7 @@ function updateVersions({
     );
   }
 
-  const known = readVersions(external_node_fs_namespaceObject.readFileSync(file, "utf8"));
+  const known = readVersions(catalog);
   for (const { dependency } of updates) {
     if (!known.has(dependency)) {
       throw new Error(

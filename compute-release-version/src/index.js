@@ -113,7 +113,7 @@ export function candidateOf(snapshotVersion) {
 }
 
 // A line of the description of a milestone that names its release train: "Release Train: 2026.10.22".
-const TRAIN_LINE = /^[ \t]*release[ \t]+train[ \t]*:[ \t]*(.*?)[ \t]*$/gim;
+const TRAIN_LINE = /^[ \t]*release[ \t]+train[ \t]*:(.*)$/gim;
 const TRAIN_NAME = /^\d{4}\.\d{2}\.\d{2}$/;
 
 /**
@@ -123,7 +123,9 @@ const TRAIN_NAME = /^\d{4}\.\d{2}\.\d{2}$/;
  * name of a branch of a train (YYYY.MM.DD), or two lines that name different trains, are errors.
  */
 export function releaseTrainOf(description, title = "the milestone") {
-  const names = [...(description ?? "").matchAll(TRAIN_LINE)].map((m) => m[1]);
+  const names = [...(description ?? "").matchAll(TRAIN_LINE)].map((m) =>
+    m[1].trim(),
+  );
   for (const name of names) {
     if (!TRAIN_NAME.test(name)) {
       throw new Error(
