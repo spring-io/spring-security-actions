@@ -31693,6 +31693,18 @@ async function execute(action) {
 const VERSION = /^[0-9A-Za-z][0-9A-Za-z._+-]*$/;
 const LINE = /^version=([^\r\n]*)/m;
 
+/** The content of a file, or undefined if there is no such file. */
+function readIfExists(file, encoding) {
+  try {
+    return external_node_fs_namespaceObject.readFileSync(file, encoding);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 /**
  * Sets the version of a properties file (gradle.properties) and commits it, as a commit of
  * its own, signed off with the identity that git is set up with. Only the line version=...
@@ -31714,10 +31726,10 @@ function setVersion({
     throw new Error("The input message is required");
   }
   const full = external_node_path_namespaceObject.resolve(directory, file);
-  if (!external_node_fs_namespaceObject.existsSync(full)) {
+  const text = readIfExists(full, "utf8");
+  if (text === undefined) {
     throw new Error(`${file} does not exist, in ${external_node_path_namespaceObject.resolve(directory)}`);
   }
-  const text = external_node_fs_namespaceObject.readFileSync(full, "utf8");
   const current = LINE.exec(text);
   if (!current) {
     throw new Error(`${file} has no line version=...`);

@@ -7,6 +7,18 @@ import { execute, isMain } from "./run.js";
 const VERSION = /^[0-9A-Za-z][0-9A-Za-z._+-]*$/;
 const LINE = /^version=([^\r\n]*)/m;
 
+/** The content of a file, or undefined if there is no such file. */
+function readIfExists(file, encoding) {
+  try {
+    return fs.readFileSync(file, encoding);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 /**
  * Sets the version of a properties file (gradle.properties) and commits it, as a commit of
  * its own, signed off with the identity that git is set up with. Only the line version=...
@@ -28,10 +40,10 @@ export function setVersion({
     throw new Error("The input message is required");
   }
   const full = path.resolve(directory, file);
-  if (!fs.existsSync(full)) {
+  const text = readIfExists(full, "utf8");
+  if (text === undefined) {
     throw new Error(`${file} does not exist, in ${path.resolve(directory)}`);
   }
-  const text = fs.readFileSync(full, "utf8");
   const current = LINE.exec(text);
   if (!current) {
     throw new Error(`${file} has no line version=...`);

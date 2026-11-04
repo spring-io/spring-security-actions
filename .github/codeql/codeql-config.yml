@@ -1,0 +1,9 @@
+name: CodeQL configuration
+
+# dist/ is the generated bundle of src/ and its dependencies, so scanning it only adds noise
+paths-ignore:
+  - '**/dist/**'
+  - '**/test/**'
+
+queries:
+  - uses: security-extended
