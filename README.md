@@ -17,6 +17,7 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 | [`check-oss-support`](check-oss-support/README.md) | Fails if the OSS support of the generation of a version ends before a date, from the Spring projects API. |
 | [`compare-branches`](compare-branches/README.md) | Whether a branch has changes that another branch lacks: a hotfix is only built for an active embargoed branch that differs from the frozen one. |
 | [`compute-release-version`](compute-release-version/README.md) | The release version of a snapshot version, and its due date, from the milestones of a repository. |
+| [`delete-branches`](delete-branches/README.md) | Deletes branches of a repository, all at once or none (`git push --atomic --delete`). |
 | [`ensure-dependency-issues`](ensure-dependency-issues/README.md) | An issue for every dependency update, in a milestone. It makes the ones that are missing. |
 | [`ensure-milestone`](ensure-milestone/README.md) | Creates a milestone in a repository if it has none of that title, with no due date. |
 | [`freeze-summary`](freeze-summary/README.md) | Writes the summary of a code freeze. |
