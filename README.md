@@ -16,6 +16,7 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 | [`check-oss-support`](check-oss-support/README.md) | Fails if the OSS support of the generation of a version ends before a date, from the Spring projects API. |
 | [`compare-branches`](compare-branches/README.md) | Whether a branch has changes that another branch lacks: a hotfix is only built for an active embargoed branch that differs from the frozen one. |
 | [`compute-release-version`](compute-release-version/README.md) | The release version of a snapshot version, and its due date, from the milestones of a repository. |
+| [`compute-tag-versions`](compute-tag-versions/README.md) | The release version and the snapshot version of a tag. |
 | [`ensure-dependency-issues`](ensure-dependency-issues/README.md) | An issue for every dependency update, in a milestone. It makes the ones that are missing. |
 | [`git-identity`](git-identity/README.md) | Sets who commits: `github-actions[bot]` by default. |
 | [`join-train`](join-train/README.md) | Joins a release to the release train, by running the workflow Release Train - Join of the project on the release branch. |
