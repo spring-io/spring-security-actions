@@ -3,6 +3,7 @@ import path from "node:path";
 import * as core from "@actions/core";
 import { git, gitTry } from "./git.js";
 import { call, createOctokit, parseRepository } from "./octokit.js";
+import { planMilestones } from "./milestones.js";
 import { execute, isMain, TitledError } from "./run.js";
 import {
   candidateOf,
@@ -179,9 +180,12 @@ export async function planFreeze(
   const oss = [];
   const lts = [];
   const releases = new Map();
+  const trackers = [];
+  const creates = [];
+  const links = [];
+  const warnings = [];
   const ossMilestones = await readMilestones(ossRepository);
   const commercialMilestones = await readMilestones(hostRepository);
-  const titles = (milestones) => milestones.map((m) => m.title);
 
   /** The milestone of a release, to be closed (or deleted) after the freeze: undefined if there is none. */
   const milestoneOf = (milestones, repository, title) => {
@@ -255,7 +259,8 @@ export async function planFreeze(
       problems.push(`${branch}: ${error.message}`);
       continue;
     }
-    const next = nextVersion(current, titles(ossMilestones));
+    const releaseVersion = releaseVersionOf(candidate, ossMilestones);
+    const next = nextVersion(current, releaseVersion);
     oss.push({
       generation: branch,
       branch,
@@ -266,7 +271,6 @@ export async function planFreeze(
       bump: next !== current,
     });
 
-    const releaseVersion = releaseVersionOf(candidate, ossMilestones);
     if (!releaseVersion) {
       problems.push(
         `${branch} (${current}) has no open milestone in ${ossRepository}, one of ${candidate}, ${candidate}-M<n> and ${candidate}-RC<n>, so there is no release to mark ready`,
@@ -297,6 +301,24 @@ export async function planFreeze(
       }
       release(hotfix, active, [active], milestone, true);
     }
+    const planned = planMilestones({
+      generation: branch,
+      candidate,
+      current,
+      next,
+      releaseVersion,
+      hotfix,
+      differs,
+      ossMilestones,
+      commercialMilestones,
+      ossRepository,
+      hostRepository,
+      milestoneOf,
+    });
+    trackers.push(...planned.trackers);
+    creates.push(...planned.creates);
+    links.push(...planned.links);
+    warnings.push(...planned.warnings);
   }
 
   for (const { generation, branch } of ltsBranchesOf({
@@ -322,7 +344,8 @@ export async function planFreeze(
       problems.push(`${branch}: ${error.message}`);
       continue;
     }
-    const next = nextVersion(current, titles(commercialMilestones));
+    const releaseVersion = releaseVersionOf(candidate, commercialMilestones);
+    const next = nextVersion(current, releaseVersion);
     lts.push({
       generation,
       branch,
@@ -330,7 +353,6 @@ export async function planFreeze(
       next,
       bump: next !== current,
     });
-    const releaseVersion = releaseVersionOf(candidate, commercialMilestones);
     if (!releaseVersion) {
       problems.push(
         `${branch} (${current}) has no open milestone in ${hostRepository}, one of ${candidate}, ${candidate}-M<n> and ${candidate}-RC<n>, so there is no release to mark ready`,
@@ -381,6 +403,10 @@ export async function planFreeze(
     oss,
     lts,
     releases: [...releases.values()],
+    trackers,
+    creates,
+    links,
+    warnings,
     problems,
   };
 }
@@ -446,6 +472,9 @@ export async function main() {
     core.info(
       `${entry.branch}: ${entry.current} to ${entry.next}${entry.bump ? "" : " (no commit)"}`,
     );
+  }
+  for (const warning of plan.warnings) {
+    core.warning(warning);
   }
   for (const entry of plan.releases) {
     core.info(

@@ -3,55 +3,35 @@ import {
   candidateOf,
   hotfixOf,
   nextVersion,
+  openReleasesOf,
   releaseVersionOf,
 } from "../src/versions.js";
 
 describe("nextVersion", () => {
   it.each([
-    ["7.0.5-SNAPSHOT", [], "7.0.6-SNAPSHOT"],
-    ["7.0.5-SNAPSHOT", ["7.0.5", "7.0.6"], "7.0.6-SNAPSHOT"],
-    ["7.0.9-SNAPSHOT", [], "7.0.10-SNAPSHOT"],
-    ["6.5.11-SNAPSHOT", ["6.5.11"], "6.5.12-SNAPSHOT"],
-  ])("%s with the milestones %j is %s", (current, milestones, next) => {
-    expect(nextVersion(current, milestones)).toBe(next);
+    ["7.0.5-SNAPSHOT", "7.0.5", "7.0.6-SNAPSHOT"],
+    ["7.0.9-SNAPSHOT", "7.0.9", "7.0.10-SNAPSHOT"],
+    ["6.5.11-SNAPSHOT", "6.5.11", "6.5.12-SNAPSHOT"],
+    ["7.0.5-SNAPSHOT", "", "7.0.6-SNAPSHOT"],
+  ])("%s with the release %j is %s", (current, release, next) => {
+    expect(nextVersion(current, release)).toBe(next);
   });
 
-  it("keeps a .0 version while the GA milestone does not exist", () => {
-    expect(nextVersion("7.2.0-SNAPSHOT", [])).toBe("7.2.0-SNAPSHOT");
-    expect(
-      nextVersion("7.2.0-SNAPSHOT", [
-        "7.2.0-M1",
-        "7.2.0-M2",
-        "7.2.0-M3",
-        "7.2.0-RC1",
-      ]),
-    ).toBe("7.2.0-SNAPSHOT");
+  it("keeps a .0 version while the release that is made is not the GA", () => {
+    expect(nextVersion("7.2.0-SNAPSHOT", "7.2.0-M1")).toBe("7.2.0-SNAPSHOT");
+    expect(nextVersion("7.2.0-SNAPSHOT", "7.2.0-RC1")).toBe("7.2.0-SNAPSHOT");
+    expect(nextVersion("7.2.0-SNAPSHOT", "")).toBe("7.2.0-SNAPSHOT");
   });
 
-  it("does not count a hotfix, a milestone of another generation or a look-alike", () => {
-    expect(
-      nextVersion("7.2.0-SNAPSHOT", [
-        "7.2.0.1",
-        "7.1.0",
-        "7.2.01",
-        "7.2.0-RC1",
-      ]),
-    ).toBe("7.2.0-SNAPSHOT");
-  });
-
-  it("goes to .1 once the GA milestone exists, open or closed", () => {
-    expect(nextVersion("7.2.0-SNAPSHOT", ["7.2.0-RC1", "7.2.0"])).toBe(
-      "7.2.1-SNAPSHOT",
-    );
-    expect(nextVersion("7.1.0-SNAPSHOT", ["7.1.0", "7.1.0.1"])).toBe(
-      "7.1.1-SNAPSHOT",
-    );
+  it("goes to .1 when the release that is made is the GA", () => {
+    expect(nextVersion("7.2.0-SNAPSHOT", "7.2.0")).toBe("7.2.1-SNAPSHOT");
+    expect(nextVersion("7.1.0-SNAPSHOT", "7.1.0")).toBe("7.1.1-SNAPSHOT");
   });
 
   it.each([["7.0.5"], ["7.0.5.1-SNAPSHOT"], ["7.1.0-RC1-SNAPSHOT"], [""]])(
     "refuses %j",
     (version) => {
-      expect(() => nextVersion(version, [])).toThrow();
+      expect(() => nextVersion(version, "")).toThrow();
     },
   );
 });
@@ -102,6 +82,32 @@ describe("releaseVersionOf", () => {
         milestone("7.2.0-M1", "2026-06-01", "closed"),
       ]),
     ).toBe("");
+  });
+});
+
+describe("openReleasesOf", () => {
+  const milestone = (title, due, state = "open") => ({
+    title,
+    state,
+    due_on: due ? `${due}T00:00:00Z` : null,
+  });
+
+  it("lists the open milestones of a .0 version in the order that they are released", () => {
+    expect(
+      openReleasesOf("7.2.0", [
+        milestone("7.2.0", "2026-12-01"),
+        milestone("7.2.0-M1", "2026-06-01", "closed"),
+        milestone("7.2.0-RC1", "2026-11-01"),
+        milestone("7.2.0-M2", "2026-09-01"),
+        milestone("7.2.0.1", "2026-12-24"),
+        milestone("7.2.1", "2027-01-01"),
+        milestone("7.2.01", "2026-01-01"),
+      ]),
+    ).toEqual(["7.2.0-M2", "7.2.0-RC1", "7.2.0"]);
+  });
+
+  it("is empty if no milestone is open", () => {
+    expect(openReleasesOf("7.2.0", [])).toEqual([]);
   });
 });
 

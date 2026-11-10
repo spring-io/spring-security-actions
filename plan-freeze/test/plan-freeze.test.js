@@ -167,6 +167,66 @@ describe("planFreeze", () => {
     });
   });
 
+  it("plans the closes and the new milestones of the next cycle of each generation", async () => {
+    const oss = [
+      milestone("7.0.5"),
+      milestone("7.1.1"),
+      milestone("7.2.0-M2", "open"),
+      milestone("7.2.0-RC1", "open"),
+      milestone("7.2.0", "open"),
+    ];
+    const commercial = [
+      ...commercialMilestones,
+      milestone("7.0.6", "open", { open_issues: 1 }),
+      milestone("7.2.0-RC1"),
+    ];
+    const plan = await setup({}, {}, { oss, commercial }).run();
+    expect(plan.problems).toEqual([]);
+    // 7.0.x and 7.1.x are bumped: the tracker of 7.0.6 is closed (7.1.2 has none)
+    expect(plan.trackers.map((t) => `${t.milestone.title} ${t.of[0]}`)).toEqual(
+      ["7.0.6 7.0.x", "7.2.0-RC1 main"],
+    );
+    expect(
+      plan.creates.map((c) => `${c.repository.split("/")[1]} ${c.title}`),
+    ).toEqual([
+      "spring-security 7.0.6",
+      "spring-security-commercial 7.0.6.1",
+      "spring-security-commercial 7.0.7",
+      "spring-security 7.1.2",
+      "spring-security-commercial 7.1.2.1",
+      "spring-security-commercial 7.1.3",
+      "spring-security-commercial 7.2.0",
+    ]);
+    expect(plan.links.map((l) => l.title)).toEqual(["7.0.6", "7.2.0-RC1"]);
+    expect(plan.warnings).toEqual([
+      expect.stringContaining("has no milestone 7.1.2"),
+    ]);
+  });
+
+  it("keeps a .0 version while the milestone of the GA exists already, if the release that is made is not the GA", async () => {
+    const oss = [
+      milestone("7.0.5"),
+      milestone("7.1.1"),
+      milestone("7.2.0-M2"),
+      milestone("7.2.0"),
+    ];
+    const plan = await setup({}, {}, { oss }).run();
+    expect(plan.oss.find((g) => g.generation === "main")).toMatchObject({
+      current: "7.2.0-SNAPSHOT",
+      next: "7.2.0-SNAPSHOT",
+      bump: false,
+    });
+  });
+
+  it("bumps a .0 version when the release that is made is the GA", async () => {
+    const oss = [milestone("7.0.5"), milestone("7.1.1"), milestone("7.2.0")];
+    const plan = await setup({}, {}, { oss }).run();
+    expect(plan.oss.find((g) => g.generation === "main")).toMatchObject({
+      next: "7.2.1-SNAPSHOT",
+      bump: true,
+    });
+  });
+
   it("says that the milestone of a hotfix does not exist", async () => {
     const plan = await setup(
       {},

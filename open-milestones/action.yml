@@ -1,0 +1,21 @@
+name: "open-milestones"
+description: "Makes the milestones of the next cycle of a code freeze (the next OSS release, and the milestones that track the fixes of the active branch), and adds the link to the OSS milestone to the commercial one that tracks it"
+
+inputs:
+  plan-file:
+    description: "The plan of the freeze (the output `plan-file` of `plan-freeze`), which has the milestones to make and to link. code-freeze/plan.json in RUNNER_TEMP by default."
+    required: false
+  opened-file:
+    description: "Where to write what was done to each milestone, as JSON. code-freeze/milestones-opened.json in RUNNER_TEMP by default."
+    required: false
+  token:
+    description: "A token that may write the milestones of the OSS and of the commercial repository (Issues: Read and write)."
+    required: true
+
+outputs:
+  opened-file:
+    description: "The file with the result for each milestone, as JSON: created, exists, linked, linked-already, skipped or failed."
+
+runs:
+  using: "node24"
+  main: "dist/index.js"

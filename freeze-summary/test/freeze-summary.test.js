@@ -123,7 +123,7 @@ describe("render", () => {
       "| embargoed/frozen/7.0.x | commercial | 7.0.5-SNAPSHOT | 7.0.6-SNAPSHOT | arrives by the merge of 7.0.x (no commit of its own) |",
     );
     expect(markdown).toContain(
-      "| main | OSS | 7.2.0-SNAPSHOT | 7.2.0-SNAPSHOT | none: the version stays, as 7.2.0 has no GA milestone yet |",
+      "| main | OSS | 7.2.0-SNAPSHOT | 7.2.0-SNAPSHOT | none: the version stays until the GA, 7.2.0, is the release that is made |",
     );
     expect(markdown).toContain(
       "| release/7.0.5 | 7.0.x, embargoed/frozen/7.0.x | Not run, this is a dry run |",
@@ -161,13 +161,25 @@ describe("render", () => {
       const milestones = [
         {
           version: "7.0.5",
+          repository: "spring-projects/spring-security",
           result: "closed-with-open",
           open: 1,
           closed: 18,
           url: "https://github.com/spring-projects/spring-security/milestone/312",
         },
-        { version: "7.0.5.1", result: "deleted", open: 0, closed: 0 },
-        { version: "6.5.11", result: "failed", error: "403 Forbidden" },
+        {
+          version: "7.0.5.1",
+          repository: commercial,
+          result: "deleted",
+          open: 0,
+          closed: 0,
+        },
+        {
+          version: "6.5.11",
+          repository: commercial,
+          result: "failed",
+          error: "403 Forbidden",
+        },
       ];
       const markdown = render({ plan, apply, milestones, dryRun: false });
       expect(markdown).toContain("| 1 / 18 | Closed with 1 open issue |");
@@ -186,6 +198,125 @@ describe("render", () => {
       });
       expect(markdown).toContain(
         "| Not closed, the freeze did not get to it |",
+      );
+    });
+  });
+
+  describe("the milestones of the next cycle", () => {
+    const oss = "spring-projects/spring-security";
+    const commercial = "spring-projects/spring-security-commercial";
+    const withCycle = {
+      ...plan,
+      warnings: [
+        `${commercial} has no milestone 7.1.2, which tracks the fixes of 7.1.x: there is nothing to close`,
+      ],
+      trackers: [
+        {
+          version: "7.0.6",
+          tracker: true,
+          deleteIfEmpty: true,
+          of: ["7.0.x"],
+          milestone: {
+            repository: commercial,
+            title: "7.0.6",
+            number: 50,
+            url: `https://github.com/${commercial}/milestone/50`,
+            state: "open",
+            open: 0,
+            closed: 0,
+          },
+        },
+      ],
+      creates: [
+        { repository: oss, title: "7.0.6", exists: false },
+        { repository: commercial, title: "7.0.6.1", exists: false },
+        { repository: commercial, title: "7.0.7", exists: true },
+      ],
+      links: [
+        {
+          repository: commercial,
+          title: "7.0.6",
+          ossRepository: oss,
+          ossTitle: "7.0.6",
+        },
+      ],
+    };
+
+    it("says what a dry run would do, and has the tracker among the milestones that are closed", () => {
+      const markdown = render({ plan: withCycle, apply, dryRun: true });
+      expect(markdown).toContain("## Warnings");
+      expect(markdown).toContain("has no milestone 7.1.2");
+      expect(markdown).toContain(
+        `| [7.0.6](https://github.com/${commercial}/milestone/50) | ${commercial} | 7.0.x (tracks the fixes of the active branch) | 0 / 0 | Would be deleted, it has no issues |`,
+      );
+      expect(markdown).toContain("## Milestones of the next cycle");
+      expect(markdown).toContain(
+        `| 7.0.6 | ${oss} | Make the milestone | Would be made |`,
+      );
+      expect(markdown).toContain(
+        `| 7.0.7 | ${commercial} | Make the milestone | There already |`,
+      );
+      expect(markdown).toContain(
+        `| 7.0.6 | ${commercial} | Link to the OSS milestone 7.0.6 | Would be added, if the milestone is not deleted for having no issues |`,
+      );
+    });
+
+    it("says what was done, and why a link was skipped", () => {
+      const opened = [
+        { kind: "create", repository: oss, title: "7.0.6", result: "created" },
+        {
+          kind: "create",
+          repository: commercial,
+          title: "7.0.6.1",
+          result: "failed",
+          error: "403 Forbidden",
+        },
+        {
+          kind: "create",
+          repository: commercial,
+          title: "7.0.7",
+          result: "exists",
+        },
+        {
+          kind: "link",
+          repository: commercial,
+          title: "7.0.6",
+          result: "skipped",
+          reason: `${commercial} has no milestone 7.0.6 (deleted: it had no issues)`,
+        },
+      ];
+      const markdown = render({
+        plan: withCycle,
+        apply,
+        opened,
+        dryRun: false,
+      });
+      expect(markdown).toContain(
+        `| 7.0.6 | ${oss} | Make the milestone | Made |`,
+      );
+      expect(markdown).toContain(
+        `| 7.0.6.1 | ${commercial} | Make the milestone | Failed: 403 Forbidden |`,
+      );
+      expect(markdown).toContain(
+        `| 7.0.7 | ${commercial} | Make the milestone | There already |`,
+      );
+      expect(markdown).toContain("| Skipped: ");
+      expect(markdown).toContain("(deleted: it had no issues)");
+    });
+
+    it("says that they were not made if the freeze did not get to it", () => {
+      const markdown = render({
+        plan: withCycle,
+        apply,
+        dryRun: false,
+        status: "failure",
+      });
+      expect(markdown).toContain("Not done, the freeze did not get to it");
+    });
+
+    it("has no section for a plan with no milestones to make", () => {
+      expect(render({ plan, apply, dryRun: true })).not.toContain(
+        "Milestones of the next cycle",
       );
     });
   });

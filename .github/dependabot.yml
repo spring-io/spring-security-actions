@@ -21,6 +21,7 @@ updates:
       - /merge-release
       - /merge-release-branch
       - /name-repositories
+      - /open-milestones
       - /plan-release-branches
       - /pr-build
       - /publish-release-notes
@@ -57,6 +58,7 @@ updates:
       - /merge-release
       - /merge-tag
       - /name-repositories
+      - /open-milestones
       - /plan-freeze
       - /plan-post-publish
       - /plan-release-branches

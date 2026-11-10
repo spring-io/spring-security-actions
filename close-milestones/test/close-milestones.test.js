@@ -160,6 +160,59 @@ describe("closeMilestone", () => {
   });
 });
 
+describe("closeMilestone, a tracker of the fixes of the active branch", () => {
+  const tracker = (version, repository, number) => ({
+    ...release(version, repository, number),
+    tracker: true,
+    deleteIfEmpty: true,
+  });
+
+  it("is deleted if it has no issues, open or closed", async () => {
+    const octokit = fakeOctokit({ [commercial]: { 5: state(0, 0) } });
+    expect(
+      await closeMilestone(
+        { release: tracker("7.0.10", commercial, 5) },
+        { octokit },
+      ),
+    ).toMatchObject({ result: "deleted", version: "7.0.10" });
+    expect(octokit.deleted).toHaveLength(1);
+    expect(octokit.closed).toEqual([]);
+  });
+
+  it("is closed if it has issues, and says how many are open", async () => {
+    const octokit = fakeOctokit({ [commercial]: { 5: state(1, 3) } });
+    expect(
+      await closeMilestone(
+        { release: tracker("7.0.10", commercial, 5) },
+        { octokit },
+      ),
+    ).toMatchObject({ result: "closed-with-open", open: 1, closed: 3 });
+    expect(octokit.deleted).toEqual([]);
+  });
+
+  it("is left alone if it is closed already and has issues", async () => {
+    const octokit = fakeOctokit({
+      [commercial]: { 5: state(0, 3, "closed") },
+    });
+    expect(
+      await closeMilestone(
+        { release: tracker("7.0.10", commercial, 5) },
+        { octokit },
+      ),
+    ).toMatchObject({ result: "already-closed" });
+    expect(octokit.closed).toEqual([]);
+    expect(octokit.deleted).toEqual([]);
+  });
+
+  it("is not deleted when it is a release with no issues", async () => {
+    const octokit = fakeOctokit({ [oss]: { 1: state(0, 0) } });
+    expect(
+      await closeMilestone({ release: release("7.0.9", oss, 1) }, { octokit }),
+    ).toMatchObject({ result: "closed" });
+    expect(octokit.deleted).toEqual([]);
+  });
+});
+
 describe("closeMilestones", () => {
   it("does each release that has a milestone, in the order of the plan", async () => {
     const octokit = fakeOctokit({

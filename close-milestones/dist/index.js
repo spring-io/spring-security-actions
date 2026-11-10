@@ -36598,7 +36598,8 @@ const DEFAULT_MILESTONES_FILE = "code-freeze/milestones.json";
  * Closes the milestone of one release, or deletes it. The milestone is read again, as issues
  * may have been moved in or out since the plan, and the counts of that read decide:
  *
- * - a hotfix with no issues at all, open or closed, is deleted: it has nothing to say,
+ * - a hotfix, or a tracker of the fixes of the active branch (`deleteIfEmpty`), with no
+ *   issues at all, open or closed, is deleted: it has nothing to say,
  * - any other milestone is closed, with open issues too (the result says how many),
  *   and one that is closed already is left alone.
  */
@@ -36621,7 +36622,10 @@ async function closeMilestone({ release }, { octokit }) {
     open: data.open_issues,
     closed: data.closed_issues,
   };
-  if (release.hotfix && data.open_issues + data.closed_issues === 0) {
+  if (
+    (release.hotfix || release.deleteIfEmpty) &&
+    data.open_issues + data.closed_issues === 0
+  ) {
     await call(
       `Deleting the milestone ${milestone.title} of ${milestone.repository}`,
       octokit.rest.issues.deleteMilestone({
@@ -36651,7 +36655,8 @@ async function closeMilestone({ release }, { octokit }) {
 }
 
 /**
- * Closes the milestones of the releases of a plan, each once. It goes on after one that
+ * Closes the milestones of the releases of a plan, and of its trackers (the milestones that
+ * track the fixes of an active branch), each once. It goes on after one that
  * fails, and says which failed: a milestone left open can be closed by hand. Returns what
  * was done for each, in the order of the plan.
  */
@@ -36684,7 +36689,7 @@ async function main() {
   const plan = JSON.parse(external_node_fs_namespaceObject.readFileSync(planFile, "utf8"));
   const octokit = createOctokit({ token: getInput("token") });
   const results = await closeMilestones(
-    { releases: plan.releases },
+    { releases: [...plan.releases, ...(plan.trackers ?? [])] },
     { octokit },
   );
   external_node_fs_namespaceObject.mkdirSync(external_node_path_namespaceObject.dirname(milestonesFile), { recursive: true });

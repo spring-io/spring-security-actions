@@ -24,7 +24,9 @@ It runs with a **dry run on by default**: it plans, makes the merges and the ver
 3. **Check**: nothing commercial goes to OSS, and both pushes would be accepted. **A dry run ends here.**
 4. **Ready**: `release-train-ready.yml` runs on each `release/<version>`, and the freeze waits for it. A release that is ready in the train already is skipped, and its branches are bumped all the same. Ready cannot be undone, so it comes after everything that can be checked, and before any bump is pushed.
 5. **Push**: the commercial repository, then OSS, each in one atomic push without force.
-6. **Milestones**: [close-milestones](../close-milestones/README.md) closes the milestone of each release, in the OSS repository for the OSS and frozen releases, and in the commercial one for a hotfix and for long-term support. A milestone with open issues is closed all the same, and the summary has the count. The milestone of a **hotfix that has no issues**, open or closed, is **deleted**. This is last, so a failed push leaves them open, and a dry run says what it would do and does nothing.
+6. **Milestones**, last, so a failed push leaves them as they were, and a dry run says what it would do and does nothing:
+   - [close-milestones](../close-milestones/README.md) closes the milestone of each release, in the OSS repository for the OSS and frozen releases, and in the commercial one for a hotfix and for long-term support. It closes the **trackers** too: the two commercial milestones that track the fixes of an active branch, the hotfix and the next release (see [the milestones of a cycle](#the-milestones-of-a-cycle)). A milestone with open issues is closed all the same, and the summary has the count. The milestone of a **hotfix, or of a tracker, that has no issues**, open or closed, is **deleted**.
+   - [open-milestones](../open-milestones/README.md) makes the milestones of the next cycle, and adds the link to the OSS milestone to the commercial one of the next release (unless that was deleted).
 
 ### The next version
 
@@ -33,10 +35,28 @@ The last segment plus one: `7.0.5-SNAPSHOT` becomes `7.0.6-SNAPSHOT`, in the com
 | `gradle.properties` now | Milestones | Becomes | Commit |
 |---|---|---|---|
 | `7.0.5-SNAPSHOT` | any | `7.0.6-SNAPSHOT` | `Next Development Version (7.0.6-SNAPSHOT)` |
-| `7.2.0-SNAPSHOT` | `7.2.0-M1` to `7.2.0-RC1`, no `7.2.0` | `7.2.0-SNAPSHOT` | none |
-| `7.2.0-SNAPSHOT` | `7.2.0` exists (open or closed) | `7.2.1-SNAPSHOT` | `Next Development Version (7.2.1-SNAPSHOT)` |
+| `7.2.0-SNAPSHOT` | the release that is made is `7.2.0-M1`, `7.2.0-M2` or `7.2.0-RC1` | `7.2.0-SNAPSHOT` | none |
+| `7.2.0-SNAPSHOT` | the release that is made is `7.2.0` (the GA) | `7.2.1-SNAPSHOT` | `Next Development Version (7.2.1-SNAPSHOT)` |
 
-A branch whose version stays has no commit, and is merged all the same. A hotfix milestone (`7.2.0.1`) does not count. The milestones are read from the OSS repository, and from the commercial one for long-term support. The freeze creates none: the release workflow does.
+The release that is made is the open milestone of the version with the earliest due date (`7.2.0-M1`, `7.2.0-RC1` or `7.2.0`), as the release workflow works it out. The milestone `7.2.0` may be created early, while a release candidate is made: it does not bump the version, only making the GA does. A branch whose version stays has no commit, and is merged all the same. A hotfix milestone (`7.2.0.1`) does not count. The milestones are read from the OSS repository, and from the commercial one for long-term support.
+
+### The milestones of a cycle
+
+The active branch is at the version of the release that the frozen branch builds now (`7.0.9-SNAPSHOT` builds `7.0.9`), so its fixes ship twice: as the hotfix of that release (`7.0.9.1`) and in the next release of OSS (`7.0.10`), which is made from the frozen branch once the freeze has fast forwarded it to the active one. Both are milestones of the **commercial** repository, the **trackers**, and the [CVE issues](cve-issues.md) are in them. A freeze from `7.0.9-SNAPSHOT` to `7.0.10-SNAPSHOT`:
+
+| What | Milestone | Repository |
+|---|---|---|
+| closed | `7.0.9` | OSS |
+| closed, deleted if it has no issues | `7.0.9.1` (the hotfix), `7.0.10` (the tracker of the next release) | commercial |
+| made | `7.0.10` | OSS |
+| made | `7.0.10.1`, `7.0.11` (the trackers of the new active branch) | commercial |
+| link added to the description | `7.0.10` gets `OSS milestone: <the URL of the OSS 7.0.10>` | commercial |
+
+The freeze makes the milestones with a title only. A milestone that is there already is left alone, and the link is added to the description without changing the rest of it. It is not added to a tracker that was deleted. The GA of a `.0` version (`7.0.0`, to `7.0.1-SNAPSHOT`) is the same: it closes `7.0.0.1` and `7.0.1`, and makes OSS `7.0.1` and commercial `7.0.1.1` and `7.0.2`.
+
+Before the GA of a `.0` version there is no hotfix, and the next milestone, release candidate or GA is planned by people, so **nothing is made in OSS**. Freezing `7.0.0-M1` closes the tracker of the open milestone after it (commercial `7.0.0-RC1`) and makes the tracker of the one after that (commercial `7.0.0`), only if its OSS milestone exists. If there is no open milestone left for `7.0.0`, the summary warns, and the next freeze would fail with `has no open milestone`.
+
+What is expected and not found is a **warning** in the summary, not a failure: a project that has not been through a freeze like this has none of the trackers. The hotfix milestone of a release that is made is still required (see below).
 
 ### The merges
 
@@ -151,22 +171,24 @@ Both repositories must let the token push to their protected branches (a bypass 
 
 ## Reading a run
 
-The summary has the versions of every branch, the releases marked ready with a link to each run, the merges in order, the pushes with the OSS leak check, and the milestones that were closed or deleted. A dry run says so in the title.
+The summary has the versions of every branch, the releases marked ready with a link to each run, the merges in order, the pushes with the OSS leak check, the milestones that were closed or deleted, and the milestones of the next cycle. A dry run says so in the title.
 
 | What the run says | What to do |
 |---|---|
 | `release/<version> has not joined the release train` | The release workflow joins it when its embargoed branch is pushed. Push it, or leave the branch out of `branches`. |
 | `release/<version> does not exist` | The release branch is built from the embargoed branch when it is pushed. Push it and wait for the release workflow. |
 | `must have one version` | Make the OSS, frozen and active branches of the generation agree. |
-| `has no open milestone` | A `.0` version needs an open milestone (`7.2.0-M2`). The release workflow creates the missing ones. |
+| `has no open milestone` | A `.0` version needs an open milestone (`7.2.0-M2`). People create these: the freeze and the release workflow cannot name them. |
 | `skips 7.1.x, which is in the middle of the chain` | Leave out the oldest or the newest branches, and not one in the middle. |
 | **Merge conflict** in a file | A fix was made on a branch and not merged forward, and it conflicts. Merge by hand, then run the freeze again. Nothing was pushed. |
 | **Not a fast forward** | The frozen branch could not be fast forwarded to the active one. Nothing was pushed. |
 | **Commercial code would reach OSS** | Do not push. The message lists the commits. The cause is a bug in the freeze or a changed history: nothing was pushed or marked ready. |
 | `Pushing the OSS branches would be refused` (the check) | Someone pushed to an OSS branch since the plan. Run it again. |
 | `The commercial branches were pushed, and the OSS branches were refused` | The commercial push worked, and OSS did not. The message has the command to push the OSS commits by hand. Do not run the freeze again: it would bump twice. |
-| `the milestone 7.0.5.1 of the hotfix does not exist` | The release workflow creates it when the active branch is pushed. Push it, or leave the branch out of `branches`. |
+| `the milestone 7.0.5.1 of the hotfix does not exist` | The previous freeze makes it, and the release workflow creates it when the active branch is pushed. Push it, or leave the branch out of `branches`. |
 | `Milestones not closed` | The freeze is done. Close the milestones that the message lists by hand: the token needs Issues: Read and write on both repositories. |
+| `Milestones not made` | The freeze is done. Make the milestones that the message lists by hand, or add the link to the OSS milestone to the description. |
+| A warning that a milestone does not exist | A tracker (`7.0.10`) was expected in the commercial repository and was not there: nothing was closed for it. Make it, so the next freeze finds it. |
 | The ready run fails | The release is not ready, so nothing was pushed. Look at the run that the summary links. Releases that did succeed stay ready, and a rerun skips them (`Ready already, skipped`), so the freeze can be run again. |
 
-Pushing the bumped embargoed branches runs the release workflow for the new versions. It finds no milestone, creates it with no due date, and ends with the notice **Milestone created**.
+Pushing the bumped embargoed branches runs the release workflow for the new versions. The freeze has made the OSS milestone (`7.0.10`) with no due date by then, so the release workflow finds it, and ends with the notice **No milestone** until its due date is set (or, for a milestone that it creates because the freeze did not, **Milestone created**).
