@@ -94,8 +94,12 @@ jobs:
             "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/$archive"
           echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check
           tar --extract --gzip --file "$RUNNER_TEMP/$archive" --directory "$RUNNER_TEMP" actionlint
+      # actionlint 1.7.12, the latest release, does not know the key queue of concurrency (it asks
+      # for cancel-in-progress or group only), which GitHub documents and post-publish.yml uses. Only
+      # that message is ignored. Remove the -ignore once an actionlint release has the key (its
+      # issues 654 and 657).
       - name: Lint the workflows
-        run: '"$RUNNER_TEMP/actionlint" -color'
+        run: '"$RUNNER_TEMP/actionlint" -color -ignore ''unexpected key "queue" for "concurrency" section'''
       - name: Check every action.yml
         run: |
           status=0
