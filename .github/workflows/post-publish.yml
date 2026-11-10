@@ -73,9 +73,15 @@ on:
 permissions:
   contents: read
 
+# The runs of all the tags of a project wait for one another, as each one changes the same branches:
+# the group has no tag in it, and queue: max lets up to 100 runs wait, in the order they arrived,
+# where by default a run that waits is replaced by the next one and a tag would be lost. A group
+# belongs to the repository that calls this workflow, so a project is one queue, and the name needs no
+# repository in it. A caller must not have a group of the same name: that cancels the caller. See
+# docs/post-publish.md.
 concurrency:
-  group: post-publish-${{ github.repository }}-${{ inputs.tag }}
-  cancel-in-progress: false
+  group: post-publish
+  queue: max
 
 jobs:
   post-publish:
