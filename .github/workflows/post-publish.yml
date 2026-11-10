@@ -73,9 +73,15 @@ on:
 permissions:
   contents: read
 
+# The runs of all the tags of a project wait for one another, as each one changes the same branches:
+# the group has no tag in it, and queue: max lets up to 100 runs wait, in the order they arrived,
+# where by default a run that waits is replaced by the next one and a tag would be lost. A group
+# belongs to the repository that calls this workflow, so a project is one queue, and the name needs no
+# repository in it. A caller must not have a group of the same name: that cancels the caller. See
+# docs/post-publish.md.
 concurrency:
-  group: post-publish-${{ github.repository }}-${{ inputs.tag }}
-  cancel-in-progress: false
+  group: post-publish
+  queue: max
 
 jobs:
   post-publish:
@@ -84,7 +90,7 @@ jobs:
     steps:
       - name: Name the repositories
         id: repositories
-        uses: spring-io/spring-security-actions/name-repositories@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/name-repositories@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
       # All the branches of the commercial repository, and no credentials left in the checkout: the
       # back-up is uploaded, and the actions that push have the token of their own.
       - name: Check out the commercial repository
@@ -95,15 +101,15 @@ jobs:
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
           persist-credentials: false
       - name: Set the git identity
-        uses: spring-io/spring-security-actions/git-identity@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/git-identity@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
       - name: Work out the versions of the tag
         id: versions
-        uses: spring-io/spring-security-actions/compute-tag-versions@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/compute-tag-versions@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           tag: ${{ inputs.tag }}
       - name: Plan what is done
         id: plan
-        uses: spring-io/spring-security-actions/plan-post-publish@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/plan-post-publish@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           release-version: ${{ steps.versions.outputs.release-version }}
           base-version: ${{ steps.versions.outputs.base-version }}
@@ -118,7 +124,7 @@ jobs:
       # Before anything is changed: the branches that are deleted last are the ones that are backed up.
       - name: Back up the branches that are deleted
         id: backup
-        uses: spring-io/spring-security-actions/backup-branches@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/backup-branches@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           repository: ${{ steps.repositories.outputs.commercial-repository }}
           branches: ${{ steps.plan.outputs.delete-branches }}
@@ -135,7 +141,7 @@ jobs:
           overwrite: true
       - name: Copy the issues of the milestone to the OSS repository
         if: ${{ steps.plan.outputs.copy == 'true' }}
-        uses: spring-io/spring-security-actions/copy-milestone-issues@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/copy-milestone-issues@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           source-repository: ${{ steps.repositories.outputs.commercial-repository }}
           destination-repository: ${{ steps.repositories.outputs.oss-repository }}
@@ -144,7 +150,7 @@ jobs:
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Merge the tag into its branch, and forward, locally
         if: ${{ steps.plan.outputs.merge != 'none' }}
-        uses: spring-io/spring-security-actions/merge-tag@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/merge-tag@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           dry-run: ${{ inputs.dry-run }}
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
@@ -154,7 +160,7 @@ jobs:
       - name: Export the merged branches
         id: export
         if: ${{ steps.plan.outputs.merge != 'none' && inputs.dry-run }}
-        uses: spring-io/spring-security-actions/export-merges@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/export-merges@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           name: merged-branches-${{ inputs.tag }}
           dry-run: true
@@ -169,20 +175,20 @@ jobs:
       # Nothing from the commercial repository may reach OSS, and the pushes must be accepted.
       - name: Check that no commercial code goes to OSS, and that the pushes would be accepted
         if: ${{ steps.plan.outputs.merge != 'none' }}
-        uses: spring-io/spring-security-actions/push-merges@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/push-merges@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           mode: check
           summary: ${{ inputs.dry-run }}
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Push OSS, and then the commercial repository
         if: ${{ steps.plan.outputs.merge != 'none' && !inputs.dry-run }}
-        uses: spring-io/spring-security-actions/push-merges@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/push-merges@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           mode: push
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       # Last: a branch that failed to be copied or merged is not deleted, and the run can be made again.
       - name: Delete the branches of the release
-        uses: spring-io/spring-security-actions/delete-branches@9bb640e6931f9da5cdd6461aa18280ce6bd09435 # 0.0.25
+        uses: spring-io/spring-security-actions/delete-branches@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           repository: ${{ steps.repositories.outputs.commercial-repository }}
           branches: ${{ steps.plan.outputs.delete-branches }}
@@ -196,7 +202,7 @@ jobs:
       actions: write
     steps:
       - name: Dispatch Deploy Docs
-        uses: spring-io/spring-security-actions/dispatch-deploy-docs@311017924b03bd84c6eeae399df43f5f739963eb # 0.0.26
+        uses: spring-io/spring-security-actions/dispatch-deploy-docs@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
 
   publish-release-notes:
     name: Publish Release Notes
@@ -211,7 +217,7 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
       - name: Publish Release Notes
-        uses: spring-io/spring-security-actions/publish-release-notes@311017924b03bd84c6eeae399df43f5f739963eb # 0.0.26
+        uses: spring-io/spring-security-actions/publish-release-notes@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           tag: ${{ inputs.tag }}
 

@@ -116,6 +116,33 @@ jobs:
 
 The same file works in the OSS repository and in the commercial one: the workflow names the commercial repository from the one that calls it. A workflow that is run by hand is only listed in the Actions tab if its file is on the default branch, so the caller must be there. A tag that is not a version fails the run at the start, and nothing is changed.
 
+### One run at a time
+
+Releases are tagged in quick succession and in any order, and every run changes the same branches (an OSS tag is merged forward into `main` and the frozen and active branches). The workflow makes the runs of a project wait for one another, so a caller has nothing to add. It has this at its top level:
+
+```yaml
+concurrency:
+  group: post-publish
+  queue: max
+```
+
+- **One queue for a project.** A group belongs to the repository that calls the workflow, so its name needs no repository in it, and it has no tag in it, so every tag of the repository shares it. A group with the tag in it, as the first version of the workflow had, lets the tags run side by side.
+- **`queue: max` matters.** By default GitHub keeps one run waiting and cancels an older waiting run when a new one arrives, so three tags pushed together would lose the middle one. With `queue: max` up to 100 runs wait, in the order they arrived (not in the order of the versions, which does not matter for the merges), and only the runs past 100 are cancelled.
+- **`cancel-in-progress` is left out,** as `false` is its default and `queue: max` does not accept `true`.
+- **A caller must not have a group of the same name,** as a group shared by the caller and the called workflow cancels the caller.
+- **The linter** `actionlint` (1.7.12, the latest release) does not know the key `queue` yet and reports `unexpected key "queue"`, although GitHub accepts it. The CI of this repository ignores that one message (see `ci.yml`); the callers do not have the key, so they are not affected.
+- **The OSS repository and the commercial one do not share a queue,** as a group belongs to a repository, and they do not need to: a tag of the OSS repository changes the OSS branches and `embargoed/frozen/*` and `embargoed/active/*`, a long-term support tag changes `embargoed/lts/*` only, and a hotfix changes none, so tags of the two repositories never write the same branch. The branches would still refuse a push that is not a fast forward, which fails safely and is run again.
+
+## Was a tag processed?
+
+GitHub does not always deliver the event of a tag (and creates none when more than three tags are pushed at once), so a tag can be left with no run. There is no scheduled check: look, and run it again.
+
+1. **Look for the run.** The runs of the caller are named after the tag, `7.1.3: Post Publish`, in the Actions tab of the repository that the tag was pushed to. A tag with no run, or with a red one, was not processed.
+2. **Run it for the tag.** Run the caller by hand with the tag as the input and the dry run **unticked**. Every step can be repeated, so a tag that is half done just finishes.
+3. **Check the result with a dry run.** Run it by hand again, with the dry run ticked. A tag that is done has nothing left to do: the pushes say `Nothing to push: every branch has the tag already`, the branches to delete are `not found`, and the copy has `skipped` all of its issues, whose originals have the comment already. Anything else in the summary is what is left.
+
+Runs of different tags wait for one another (see [one run at a time](#one-run-at-a-time)), so several tags can be run by hand at once, in any order.
+
 ## The token
 
 `RELEASE_AUTOMATION_TOKEN` is the one of the other workflows, and needs, on **both** repositories:
