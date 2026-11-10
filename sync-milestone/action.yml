@@ -1,0 +1,40 @@
+name: "sync-milestone"
+description: "Keeps the milestones of a release in step with its release train: when the due date of the OSS milestone, or the release train that a commercial milestone names, changes, the release leaves the train that it was in and joins the new one, and the due dates and descriptions of its milestones follow"
+
+inputs:
+  repository:
+    description: "The repository (owner/repo) of the milestone that was edited: the OSS repository or the commercial one"
+    required: true
+  milestone:
+    description: "The title of the milestone that was edited, 7.0.9"
+    required: true
+  changes:
+    description: "What the edit changed, the field `changes` of the milestone event of GitHub as JSON (due_on, description or title, each with from). Empty for a run by hand."
+    required: false
+  sender:
+    description: "Who made the edit (github.event.sender.login). An edit by the user of the token is the handler's own, and is left alone."
+    required: false
+  project:
+    description: "The project id in the release train. The name of the OSS repository if it is not given."
+    required: false
+  release-train-repository:
+    description: "The release train repository (owner/repo)"
+    required: false
+    default: "spring-io/release-train"
+  dispatch:
+    description: "`false` does not run the workflows that join and leave a train: for after the release joined, to write the lines of the milestones"
+    required: false
+    default: "true"
+  token:
+    description: "A token that writes the milestones of both repositories (Issues: Read and write), reads the release train repository (Contents: Read-only), and runs the workflows Release Train - Join and Leave of the commercial repository (Actions: Read and write)"
+    required: true
+
+outputs:
+  skipped:
+    description: "true if the edit was the handler's own"
+  changed:
+    description: "true if anything was done"
+
+runs:
+  using: "node24"
+  main: "dist/index.js"

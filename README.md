@@ -45,6 +45,7 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 | [`ready-train`](ready-train/README.md) | Runs the workflow Release Train - Ready of the project on each release branch of a code freeze, and waits for it. |
 | [`set-version`](set-version/README.md) | Sets the version of `gradle.properties`, in a commit of its own. |
 | [`start-branch`](start-branch/README.md) | Starts (or resets) a branch at a commit or a branch. |
+| [`sync-milestone`](sync-milestone/README.md) | Keeps the milestones of a release in step with its release train: joins and leaves the train when a due date or a `Release Train:` line changes. |
 | [`update-versions`](update-versions/README.md) | Changes the versions of a version catalog, with one commit for each. |
 
 ## The workflows of the release automation
@@ -56,6 +57,8 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 [`ensure-cve-issues.yml`](.github/workflows/ensure-cve-issues.yml) is a reusable workflow for a push to an active branch: it makes a closed issue for every `Fixes CVE-ID` that the push has, in the milestones that it ships in (the hotfix and the next release). [docs/cve-issues.md](docs/cve-issues.md) is the guide, with the caller.
 
 [`code-freeze.yml`](.github/workflows/code-freeze.yml) is a reusable workflow for the code freeze of a project: it moves every branch to its next development version, merges forward, marks the releases ready and pushes, with a dry run that is on by default. [docs/code-freeze.md](docs/code-freeze.md) is the guide, with the caller, the stub that the default branch of the commercial repository needs, and the guarantee that nothing commercial reaches OSS.
+
+[`sync-milestone.yml`](.github/workflows/sync-milestone.yml) is a reusable workflow that runs when a milestone is edited, in the OSS repository or in the commercial one: the release joins the release train of the due date of its milestone (and leaves the one it was in), and the milestones of the commercial repository follow. [docs/milestones.md](docs/milestones.md) is the guide, with the two callers.
 
 ## Working on an action
 

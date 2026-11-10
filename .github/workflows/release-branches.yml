@@ -58,7 +58,8 @@ name: release-branches
 # got the release yet: the workflow Release Train - Join of the project runs on the release
 # branch (it runs Join in the release train repository). The due date of the milestone of a
 # hotfix or a long-term support version is set to the commercial-general-availability of the
-# train first.
+# train first. The milestone says which train it is in, in its description (Release Train:
+# 2026.11.19), or what is wrong (ERROR: ...): see docs/milestones.md.
 # The workflow can be run by hand (workflow_dispatch of the caller) on an embargoed branch, for
 # example after the due date of a milestone was set: what has joined is not joined again.
 #
@@ -437,4 +438,17 @@ jobs:
           release-repository: ${{ github.repository }}
           release-branch: release/${{ needs.plan.outputs.release-version }}
           deployment-destination: ${{ env.DEPLOYMENT_DESTINATION }}
+          token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+      # The milestone says which train the release is in (Release Train: 2026.11.19), and what is wrong
+      # if it cannot be (ERROR: ...): the workflow sync-milestone does that when a milestone is edited,
+      # and this is the same for a release that joined here. It joins and leaves nothing: it was joined
+      # above, and the line of an earlier run that could not join is replaced.
+      - name: Write the release train in the milestones
+        if: ${{ steps.train.outputs.found == 'true' }}
+        uses: spring-io/spring-security-actions/sync-milestone@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
+        with:
+          repository: ${{ env.KIND == 'frozen' && needs.plan.outputs.oss-repository || github.repository }}
+          milestone: ${{ needs.plan.outputs.release-version }}
+          release-train-repository: ${{ inputs.release-train-repository || 'spring-io/release-train' }}
+          dispatch: "false"
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}

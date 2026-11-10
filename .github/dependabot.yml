@@ -29,6 +29,7 @@ updates:
       - /run-gradle
       - /set-version
       - /start-branch
+      - /sync-milestone
       - /test
       - /update-versions
     schedule:
@@ -68,6 +69,7 @@ updates:
       - /ready-train
       - /set-version
       - /start-branch
+      - /sync-milestone
       - /update-versions
     schedule:
       interval: weekly
