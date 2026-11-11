@@ -77,8 +77,16 @@ on:
         description: "The repository of the milestone (the OSS one, or this one)"
         required: false
       milestone:
-        description: "The title of the milestone, 7.0.9"
-        required: true
+        description: "The title of the milestone, 7.0.9 (not needed with all)"
+        required: false
+      all:
+        description: "Sync every open milestone of the project that has a release"
+        type: boolean
+        default: false
+      dry-run:
+        description: "Only say what would be done"
+        type: boolean
+        default: true
       changes:
         description: "The changes of the event, as JSON (the OSS caller gives them)"
         required: false
@@ -93,6 +101,8 @@ jobs:
     with:
       repository: ${{ inputs.repository || github.repository }}
       milestone: ${{ inputs.milestone || github.event.milestone.title }}
+      all: ${{ github.event_name == 'workflow_dispatch' && inputs.all }}
+      dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
       changes: ${{ inputs.changes || toJSON(github.event.changes) }}
       sender: ${{ inputs.sender || (github.event_name == 'milestone' && github.event.sender.login) || '' }}
       release-train-repository: ${{ vars.RELEASE_TRAIN_REPOSITORY }}
@@ -102,6 +112,22 @@ jobs:
 ```
 
 A run by hand with only `milestone` (and `repository` for an OSS milestone) syncs the milestones as they are: the train that the release has to leave is found from the description, as the previous due date is not known. It has no sender, so it always runs, whoever starts it.
+
+### Syncing by hand, with a dry run
+
+Run the caller of the commercial repository from the Actions tab (**Run workflow**, on its default branch):
+
+| What you want | Inputs |
+|---|---|
+| see what would be done for every release of the project | `all` on, `dry-run` on (the default) |
+| do it | the same with `dry-run` off |
+| one milestone, and what follows it | `milestone` `7.0.9` (and `repository` for an OSS milestone, `spring-projects/spring-security`), `all` off |
+
+A dry run writes nothing and runs nothing: the summary lists, for each milestone, what it would change (`would change spring-projects/spring-security 7.0.9: description is now: Release Train: 2026.11.19`) and which releases would join or leave a train, and ends with the totals. A real run does the same, and the totals say what was done.
+
+`all` goes through the open milestones that have a release, in the OSS repository (each with its commercial milestone and its hotfix), and the open commercial milestones of long-term support (those with no OSS milestone, that have a `Release Train:` line or a long-term support branch). Closed milestones, the milestones that track the next release (`7.0.10`), titles that are not the version of a release (`7.0.x`), and an OSS milestone that has no due date and no `Release Train:` line (it has never been in a train, and its commercial milestone may be one that was released long ago) are left out. It knows no previous due date, so a release leaves the train that its description names. A release that is in its train already is not joined again, so it is safe to run it twice.
+
+It is how to bring the milestones of a project to what the handler would have made, after this was set up: run the dry run, read the summary, and run it again with `dry-run` off.
 
 ### The caller of the OSS repository
 

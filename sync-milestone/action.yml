@@ -6,8 +6,8 @@ inputs:
     description: "The repository (owner/repo) of the milestone that was edited: the OSS repository or the commercial one"
     required: true
   milestone:
-    description: "The title of the milestone that was edited, 7.0.9"
-    required: true
+    description: "The title of the milestone that was edited, 7.0.9. Not needed with `all`"
+    required: false
   changes:
     description: "What the edit changed, the field `changes` of the milestone event of GitHub as JSON (due_on, description or title, each with from). Empty for a run by hand."
     required: false
@@ -21,6 +21,14 @@ inputs:
     description: "The release train repository (owner/repo)"
     required: false
     default: "spring-io/release-train"
+  all:
+    description: "`true` syncs every open milestone of the project that has a release (the OSS ones, with their commercial milestone and hotfix, and the commercial ones of long-term support), for a run by hand. The milestone, changes and sender are not used."
+    required: false
+    default: "false"
+  dry-run:
+    description: "`true` writes nothing and runs nothing: the summary says what would be done"
+    required: false
+    default: "false"
   dispatch:
     description: "`false` does not run the workflows that join and leave a train: for after the release joined, to write the lines of the milestones"
     required: false

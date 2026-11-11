@@ -67,7 +67,11 @@ export function fakeGitHub({
     updates,
     dispatches,
     milestones,
-    paginate: async (_method, { owner, repo }) => list(owner, repo),
+    // as GitHub does: the milestones of the state asked for, and new objects every time
+    paginate: async (_method, { owner, repo, state = "open" }) =>
+      structuredClone(
+        list(owner, repo).filter((m) => state === "all" || m.state === state),
+      ),
     rest: {
       issues: {
         listMilestones: Symbol("listMilestones"),

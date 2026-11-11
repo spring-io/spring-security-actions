@@ -58,6 +58,10 @@ export function repositoriesOf(repository) {
  * Nothing is written to a milestone that is right already, so that a run that is done again
  * makes no edit (and so no event of GitHub).
  *
+ * `dryRun` does the same and writes nothing and runs nothing: `actions` says what would be
+ * done, and `events` has it in a form that can be counted (see syncAll). What it would write
+ * is kept in memory, so that what comes after sees it, as it would.
+ *
  * `override` is for an edit that the user of the token made on purpose: its description
  * starts with !, which is taken out first (that edit is the handler's own, and is ignored,
  * so it does not run it again).
@@ -75,11 +79,13 @@ export async function syncMilestone(
     trainRepository,
     dispatch = true,
     override = false,
+    dryRun = false,
   },
   { octokit, log = () => {} },
 ) {
   const { oss, host } = repositoriesOf(repository);
   const actions = [];
+  const events = [];
   const lists = new Map();
   const trains = new Map();
   const note = (line) => {
@@ -133,15 +139,24 @@ export async function syncMilestone(
       return;
     }
     const { owner, repo: name } = parseRepository(repo);
-    await call(
-      `Updating the milestone ${found.title} of ${repo}`,
-      octokit.rest.issues.updateMilestone({
-        owner,
-        repo: name,
-        milestone_number: found.number,
-        ...update,
-      }),
-    );
+    if (!dryRun) {
+      await call(
+        `Updating the milestone ${found.title} of ${repo}`,
+        octokit.rest.issues.updateMilestone({
+          owner,
+          repo: name,
+          milestone_number: found.number,
+          ...update,
+        }),
+      );
+    }
+    events.push({
+      type: "update",
+      repository: repo,
+      title: found.title,
+      due: "due_on" in update,
+      description: "description" in update,
+    });
     Object.assign(found, {
       ...(update.due_on !== undefined && { due_on: update.due_on }),
       ...(update.description !== undefined && {
@@ -149,7 +164,7 @@ export async function syncMilestone(
       }),
     });
     note(
-      `${repo} ${found.title}: ${[
+      `${dryRun ? "would change" : "changed"} ${repo} ${found.title}: ${[
         "due_on" in update
           ? update.due_on === null
             ? "due date cleared"
@@ -182,6 +197,9 @@ export async function syncMilestone(
   };
 
   const run = async (workflow, version, inputs) => {
+    if (dryRun) {
+      return;
+    }
     const { owner, repo } = parseRepository(host);
     await call(
       `Running ${workflow} on release/${version} of ${host}`,
@@ -212,7 +230,10 @@ export async function syncMilestone(
         "release-train": train.branch,
         "release-train-repository": trainRepository,
       });
-      note(`${version} joins the release train ${train.branch}`);
+      events.push({ type: "join", version, train: train.branch });
+      note(
+        `${version} ${dryRun ? "would join" : "joins"} the release train ${train.branch}`,
+      );
     }
     return {};
   };
@@ -248,7 +269,10 @@ export async function syncMilestone(
           "release-train": name,
           "release-train-repository": trainRepository,
         });
-        note(`${version} leaves the release train ${name}`);
+        events.push({ type: "leave", version, train: name });
+        note(
+          `${version} ${dryRun ? "would leave" : "leaves"} the release train ${name}`,
+        );
       }
     }
     return {};
@@ -410,7 +434,7 @@ export async function syncMilestone(
 
   if (!RELEASE.test(title) && !HOTFIX.test(title)) {
     note(`${title} is not the version of a release: nothing to do`);
-    return { actions };
+    return { actions, events };
   }
   if (override) {
     const edited = await find(repository, title);
@@ -436,14 +460,19 @@ export async function syncMilestone(
     }
   } else if (await find(oss, title)) {
     await syncRelease(title, { fromOss: false });
-  } else if (await isLts(octokit, host, title)) {
+  } else if (
+    (await isLts(octokit, host, title)) ||
+    trainOf((await find(host, title))?.description) ||
+    trainOf(changes?.description?.from)
+  ) {
+    // long-term support: it has a branch for it, or its description names a train
     await syncLts(title);
   } else {
     note(
       `${title} is not a milestone of OSS, and ${host} has no long-term support branch for it: nothing to do`,
     );
   }
-  return { actions };
+  return { actions, events };
 }
 
 /** Whether the commercial repository has the long-term support branch of a version (5.8.30 is embargoed/lts/5.8.x). */
@@ -463,4 +492,90 @@ export async function isLts(octokit, host, version) {
     }
     throw error;
   }
+}
+
+const byVersion = (a, b) =>
+  a.title.localeCompare(b.title, undefined, { numeric: true });
+
+/**
+ * Syncs every open milestone of a project that has a release: the OSS milestones of the
+ * releases (each with its commercial milestone and its hotfix), and the commercial milestones
+ * of long-term support that have no OSS milestone. What was done for each, and the totals,
+ * are returned: see syncMilestone, which it calls for each, with no previous train known (the
+ * descriptions have it). The trackers of the next release, anything that is not the version
+ * of a release, and an OSS milestone with no due date and no train line (it has never been in
+ * a train, and its commercial milestone may be one that was released long ago), are left
+ * alone.
+ */
+export async function syncAll(
+  { repository, project, trainRepository, dispatch = true, dryRun = false },
+  { octokit, log = () => {} },
+) {
+  const { oss, host } = repositoriesOf(repository);
+  const list = async (repo, state) => {
+    const { owner, repo: name } = parseRepository(repo);
+    return call(
+      `Reading the milestones of ${repo}`,
+      octokit.paginate(octokit.rest.issues.listMilestones, {
+        owner,
+        repo: name,
+        state,
+        per_page: 100,
+      }),
+    );
+  };
+  const ossAll = await list(oss, "all");
+  const known = new Set(ossAll.map((m) => m.title));
+  const targets = [
+    // a milestone with no due date and no line has never been in a train: there is nothing to sync
+    ...ossAll
+      .filter(
+        (m) =>
+          m.state === "open" &&
+          RELEASE.test(m.title) &&
+          (m.due_on || trainOf(m.description)),
+      )
+      .sort(byVersion)
+      .map((m) => ({ repository: oss, title: m.title })),
+    // long-term support: it has no OSS milestone, and a branch for it or a line in its description
+    ...(
+      await Promise.all(
+        (await list(host, "open"))
+          .filter((m) => PATCH.test(m.title) && !known.has(m.title))
+          .sort(byVersion)
+          .map(async (m) =>
+            trainOf(m.description) || (await isLts(octokit, host, m.title))
+              ? { repository: host, title: m.title }
+              : undefined,
+          ),
+      )
+    ).filter(Boolean),
+  ];
+  const results = [];
+  for (const target of targets) {
+    const { actions, events } = await syncMilestone(
+      {
+        repository: target.repository,
+        milestone: target.title,
+        project,
+        trainRepository,
+        dispatch,
+        dryRun,
+      },
+      { octokit, log },
+    );
+    results.push({ ...target, actions, events });
+  }
+  const events = results.flatMap((r) => r.events);
+  const count = (predicate) => events.filter(predicate).length;
+  return {
+    results,
+    totals: {
+      milestones: results.length,
+      descriptions: count((e) => e.type === "update" && e.description),
+      dueDates: count((e) => e.type === "update" && e.due),
+      joins: count((e) => e.type === "join"),
+      leaves: count((e) => e.type === "leave"),
+    },
+  };
 }

@@ -46,7 +46,9 @@ So a field that was empty is **not** in `changes`, and `{}` is treated as no cha
 | Input | Required | What it is |
 |---|---|---|
 | `repository` | yes | `owner/repo` of the milestone that was edited, OSS or commercial. |
-| `milestone` | yes | Its title, `7.0.9`. |
+| `milestone` | yes, unless `all` | Its title, `7.0.9`. |
+| `all` | no, `false` | `true` syncs every open milestone of the project that has a release (the OSS ones, with their commercial milestone and hotfix, and the commercial ones of long-term support). The milestone, `changes` and `sender` are not used. An OSS milestone with no due date and no `Release Train:` line is left out. |
+| `dry-run` | no, `false` | `true` writes nothing and runs nothing: the summary says what would be done, with the totals, and the outputs are the same. |
 | `changes` | no | The field `changes` of the event, as JSON: `{"due_on":{"from":"2026-11-19T00:00:00Z"}}`. Empty for a run by hand. |
 | `sender` | no | `github.event.sender.login`, for an edit. Empty for a run by hand. |
 | `project` | no | The project id in the train, the name of the OSS repository by default. |

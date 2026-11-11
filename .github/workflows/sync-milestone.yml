@@ -15,6 +15,9 @@ name: sync-milestone
 #   - An edit of the commercial milestone of an OSS version, or of its hotfix, is put right from the
 #     OSS milestone.
 #
+# By hand, it can sync one milestone (and what follows it), or all of them (all), and the dry run only
+# says what it would do: see docs/milestones.md.
+#
 # An edit by the user of the token is the one of this workflow, and is left alone, unless the description
 # starts with ! (the owner of the token asking for a run: the ! is taken out, and it runs once).
 #
@@ -31,9 +34,20 @@ on:
         type: string
         required: true
       milestone:
-        description: "The title of the milestone that was edited, for example 7.0.9"
+        description: "The title of the milestone that was edited, for example 7.0.9. Not needed with all"
         type: string
-        required: true
+        required: false
+        default: ""
+      all:
+        description: "Sync every open milestone of the project that has a release, for a run by hand"
+        type: boolean
+        required: false
+        default: false
+      dry-run:
+        description: "Write nothing and run nothing: the summary says what would be done"
+        type: boolean
+        required: false
+        default: false
       changes:
         description: "What the edit changed, the field changes of the event (toJSON(github.event.changes)). Empty for a run by hand"
         type: string
@@ -80,6 +94,8 @@ jobs:
         with:
           repository: ${{ inputs.repository }}
           milestone: ${{ inputs.milestone }}
+          all: ${{ inputs.all }}
+          dry-run: ${{ inputs.dry-run }}
           changes: ${{ inputs.changes }}
           sender: ${{ inputs.sender }}
           release-train-repository: ${{ inputs.release-train-repository || 'spring-io/release-train' }}

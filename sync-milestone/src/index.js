@@ -1,7 +1,7 @@
 import * as core from "@actions/core";
 import { createOctokit, parseRepository } from "./octokit.js";
 import { execute, isMain } from "./run.js";
-import { repositoriesOf, syncMilestone } from "./sync.js";
+import { repositoriesOf, syncAll, syncMilestone } from "./sync.js";
 import { addSummary } from "./summary.js";
 
 /**
@@ -57,10 +57,60 @@ export async function verdictOf(octokit, { repository, milestone, sender }) {
   return { skip: !override, override };
 }
 
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * The summary of a run over all the milestones, as markdown: what each one did (or would do),
+ * and the totals.
+ */
+export function renderAll({ repository, dryRun, results, totals }) {
+  const lines = [
+    `# Sync of all the milestones of ${repository}${dryRun ? "     DRY RUN: nothing was written or run" : ""}`,
+    "",
+  ];
+  for (const { repository: where, title, actions } of results) {
+    lines.push(`## ${where} ${title}`, "");
+    lines.push(
+      ...(actions.length > 0
+        ? actions.map((a) => `- ${a}`)
+        : ["- nothing to change"]),
+      "",
+    );
+  }
+  const verb = dryRun ? "would" : "did";
+  lines.push(
+    `**Totals:** ${plural(totals.milestones, "milestone")} looked at. ${plural(totals.descriptions, "description")} ${verb} change, ${plural(totals.dueDates, "due date")}, ${plural(totals.joins, "release")} ${verb} join a train, ${plural(totals.leaves, "release")} ${verb} leave one.`,
+    "",
+  );
+  return lines.join("\n");
+}
+
+async function mainAll(octokit, repository) {
+  const dryRun = core.getInput("dry-run") === "true";
+  const { oss } = repositoriesOf(repository);
+  const { results, totals } = await syncAll(
+    {
+      repository,
+      project: core.getInput("project") || oss.split("/")[1],
+      trainRepository:
+        core.getInput("release-train-repository") || "spring-io/release-train",
+      dispatch: core.getInput("dispatch") !== "false",
+      dryRun,
+    },
+    { octokit, log: (line) => core.info(line) },
+  );
+  core.setOutput("skipped", "false");
+  core.setOutput("changed", String(results.some((r) => r.events.length > 0)));
+  addSummary(renderAll({ repository, dryRun, results, totals }));
+}
+
 export async function main() {
   const repository = core.getInput("repository", { required: true });
-  const title = core.getInput("milestone", { required: true });
   const octokit = createOctokit({ token: core.getInput("token") });
+  if (core.getInput("all") === "true") {
+    return mainAll(octokit, repository);
+  }
+  const title = core.getInput("milestone", { required: true });
   const verdict = await verdictOf(octokit, {
     repository,
     milestone: title,
@@ -87,6 +137,7 @@ export async function main() {
         core.getInput("release-train-repository") || "spring-io/release-train",
       dispatch: core.getInput("dispatch") !== "false",
       override: verdict.override,
+      dryRun: core.getInput("dry-run") === "true",
     },
     { octokit, log: (line) => core.info(line) },
   );
