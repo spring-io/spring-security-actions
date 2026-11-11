@@ -152,12 +152,12 @@ describe("render", () => {
         "| [7.0.5](https://github.com/spring-projects/spring-security/milestone/312) | spring-projects/spring-security | 7.0.x, embargoed/frozen/7.0.x | 2 / 17 | Would be closed with 2 open issues |",
       );
       expect(markdown).toContain(
-        `| [7.0.5.1](https://github.com/${commercial}/milestone/41) | ${commercial} | embargoed/active/7.0.x (a hotfix) | 0 / 0 | Would be deleted, it has no issues |`,
+        `| [7.0.5.1](https://github.com/${commercial}/milestone/41) | ${commercial} | embargoed/active/7.0.x (a hotfix) | 0 / 0 | Would be closed |`,
       );
       expect(markdown).toContain("| 0 / 6 | Already closed |");
     });
 
-    it("says what was done, and links none that was deleted", () => {
+    it("says what was done", () => {
       const milestones = [
         {
           version: "7.0.5",
@@ -170,7 +170,7 @@ describe("render", () => {
         {
           version: "7.0.5.1",
           repository: commercial,
-          result: "deleted",
+          result: "closed",
           open: 0,
           closed: 0,
         },
@@ -184,7 +184,7 @@ describe("render", () => {
       const markdown = render({ plan, apply, milestones, dryRun: false });
       expect(markdown).toContain("| 1 / 18 | Closed with 1 open issue |");
       expect(markdown).toContain(
-        `| 7.0.5.1 | ${commercial} | embargoed/active/7.0.x (a hotfix) | 0 / 0 | Deleted, it had no issues |`,
+        `| [7.0.5.1](https://github.com/${commercial}/milestone/41) | ${commercial} | embargoed/active/7.0.x (a hotfix) | 0 / 0 | Closed |`,
       );
       expect(markdown).toContain("| 0 / 6 | Failed: 403 Forbidden |");
     });
@@ -214,7 +214,6 @@ describe("render", () => {
         {
           version: "7.0.6",
           tracker: true,
-          deleteIfEmpty: true,
           of: ["7.0.x"],
           milestone: {
             repository: commercial,
@@ -247,7 +246,7 @@ describe("render", () => {
       expect(markdown).toContain("## Warnings");
       expect(markdown).toContain("has no milestone 7.1.2");
       expect(markdown).toContain(
-        `| [7.0.6](https://github.com/${commercial}/milestone/50) | ${commercial} | 7.0.x (tracks the fixes of the active branch) | 0 / 0 | Would be deleted, it has no issues |`,
+        `| [7.0.6](https://github.com/${commercial}/milestone/50) | ${commercial} | 7.0.x (tracks the fixes of the active branch) | 0 / 0 | Would be closed |`,
       );
       expect(markdown).toContain("## Milestones of the next cycle");
       expect(markdown).toContain(
@@ -257,7 +256,7 @@ describe("render", () => {
         `| 7.0.7 | ${commercial} | Make the milestone | There already |`,
       );
       expect(markdown).toContain(
-        `| 7.0.6 | ${commercial} | Link to the OSS milestone 7.0.6 | Would be added, if the milestone is not deleted for having no issues |`,
+        `| 7.0.6 | ${commercial} | Link to the OSS milestone 7.0.6 | Would be added |`,
       );
     });
 
@@ -282,7 +281,7 @@ describe("render", () => {
           repository: commercial,
           title: "7.0.6",
           result: "skipped",
-          reason: `${commercial} has no milestone 7.0.6 (deleted: it had no issues)`,
+          reason: `${commercial} has no milestone 7.0.6 (it is not there)`,
         },
       ];
       const markdown = render({
@@ -301,7 +300,7 @@ describe("render", () => {
         `| 7.0.7 | ${commercial} | Make the milestone | There already |`,
       );
       expect(markdown).toContain("| Skipped: ");
-      expect(markdown).toContain("(deleted: it had no issues)");
+      expect(markdown).toContain("(it is not there)");
     });
 
     it("says that they were not made if the freeze did not get to it", () => {

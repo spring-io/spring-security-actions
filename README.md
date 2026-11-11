@@ -17,7 +17,7 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 | [`check-not-ready`](check-not-ready/README.md) | Fails if the release train has the release as ready already. |
 | [`check-oss-support`](check-oss-support/README.md) | Fails if the OSS support of the generation of a version ends before a date, from the Spring projects API. |
 | [`compare-branches`](compare-branches/README.md) | Whether a branch has changes that another branch lacks: a hotfix is only built for an active embargoed branch that differs from the frozen one. |
-| [`close-milestones`](close-milestones/README.md) | Closes the milestone of each release of a code freeze, and of the trackers of the fixes of the active branch, and deletes the milestone of a hotfix or of a tracker that has no issues. |
+| [`close-milestones`](close-milestones/README.md) | Closes the milestone of each release of a code freeze, and of the trackers of the fixes of the active branch. It never deletes one. |
 | [`compute-release-version`](compute-release-version/README.md) | The release version of a snapshot version, and its due date, from the milestones of a repository. |
 | [`compute-tag-versions`](compute-tag-versions/README.md) | The release version and the snapshot version of a tag. |
 | [`copy-milestone-issues`](copy-milestone-issues/README.md) | Copies the issues and the pull requests of a milestone to another repository, as issues, and comments on each original with the link to its copy. |

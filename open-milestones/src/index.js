@@ -30,8 +30,7 @@ export function withLink(description, url) {
  *   one). One that is there is left alone.
  * - `links`: a commercial milestone gets the line `OSS milestone: <url>` added to its
  *   description, if it does not have the URL, and the rest of its description is kept. It is
- *   read again first: a tracker that the freeze deleted (it had no issues) is not there any
- *   more, and gets nothing.
+ *   read again first: one that is not there (someone deleted it by hand) gets nothing.
  *
  * It goes on after one that fails, and says which failed. Returns what was done, in order.
  */
@@ -117,7 +116,7 @@ export async function openMilestones(
         results.push({
           ...base,
           result: "skipped",
-          reason: `${link.repository} has no milestone ${link.title} (deleted: it had no issues)`,
+          reason: `${link.repository} has no milestone ${link.title} (it is not there)`,
         });
         continue;
       }

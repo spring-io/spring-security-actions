@@ -10,8 +10,8 @@ The active embargoed branch (`embargoed/active/7.0.x`) is at the version of the 
 |---|---|---|---|
 | `7.0.9` | OSS | the [code freeze](code-freeze.md) before it, or the release workflow, with a title only | the code freeze that releases it |
 | `7.0.9` | commercial | the release workflow (a frozen branch), with the link to the OSS milestone | not closed by the freeze |
-| `7.0.9.1`, the hotfix | commercial | the code freeze before it, or the release workflow | the code freeze, deleted if it has no issues |
-| `7.0.10`, the next release | commercial | the code freeze before it | the code freeze, deleted if it has no issues |
+| `7.0.9.1`, the hotfix | commercial | the code freeze before it, or the release workflow | the code freeze |
+| `7.0.10`, the next release | commercial | the code freeze before it | the code freeze |
 
 A freeze from `7.0.9-SNAPSHOT` to `7.0.10-SNAPSHOT` closes `7.0.9` (OSS), `7.0.9.1` and `7.0.10` (commercial), and makes OSS `7.0.10` and the commercial `7.0.10.1` and `7.0.11`: [the code freeze guide](code-freeze.md#the-milestones-of-a-cycle) has the rules, and what a `.0` version does. The due dates and the release trains are not made by the freeze: they are set by people, and followed by the workflow below.
 

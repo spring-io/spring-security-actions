@@ -42,7 +42,7 @@ A release that is **ready already** in the train is not a problem: its entry in 
 
 ## Outputs
 
-`plan-file`. The plan has `oss` and `lts` (each branch with `current`, `next` and `bump`), `releases` (`version`, `branch`, `builtFrom`, `of`, `hotfix`, `milestone`), `trackers` (milestones to close or delete, shaped like the releases, with `tracker` and `deleteIfEmpty`), `creates` (`repository`, `title`, `exists`, and a `description` if it has one) and `links` (the commercial milestone that gets the link to an OSS one), `warnings` and `problems`.
+`plan-file`. The plan has `oss` and `lts` (each branch with `current`, `next` and `bump`), `releases` (`version`, `branch`, `builtFrom`, `of`, `hotfix`, `milestone`), `trackers` (milestones to close, shaped like the releases, with `tracker`), `creates` (`repository`, `title`, `exists`, and a `description` if it has one) and `links` (the commercial milestone that gets the link to an OSS one), `warnings` and `problems`.
 
 ## Secrets and permissions
 

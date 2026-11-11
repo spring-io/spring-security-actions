@@ -63,7 +63,6 @@ describe("planMilestones, a freeze from a patch version", () => {
     expect(planned.trackers.map((t) => t.version)).toEqual(["7.0.10"]);
     expect(planned.trackers[0]).toMatchObject({
       tracker: true,
-      deleteIfEmpty: true,
       of: ["7.0.x"],
       milestone: { repository: HOST, title: "7.0.10" },
     });

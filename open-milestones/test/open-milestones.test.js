@@ -204,7 +204,7 @@ describe("openMilestones", () => {
     expect(results[0].result).toBe("linked-already");
   });
 
-  it("gives nothing to a tracker that was deleted, and says so", async () => {
+  it("gives nothing to a tracker that is not there, and says so", async () => {
     const octokit = fakeOctokit({
       [oss]: [milestone(9, "7.0.10")],
       [commercial]: [],
@@ -224,7 +224,7 @@ describe("openMilestones", () => {
     );
     expect(octokit.updated).toEqual([]);
     expect(results[0]).toMatchObject({ result: "skipped" });
-    expect(results[0].reason).toContain("deleted");
+    expect(results[0].reason).toContain("it is not there");
   });
 
   it("goes on after a milestone that fails, and says which", async () => {

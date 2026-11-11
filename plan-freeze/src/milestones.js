@@ -1,7 +1,7 @@
 import { candidateOf, openReleasesOf } from "./versions.js";
 
 /**
- * The milestones of one branch that a code freeze closes, deletes and makes, besides the
+ * The milestones of one branch that a code freeze closes and makes, besides the
  * ones of the releases it marks ready (those are in the plan as `releases`).
  *
  * The active embargoed branch is at the version of the release that the frozen branch builds
@@ -9,12 +9,12 @@ import { candidateOf, openReleasesOf } from "./versions.js";
  * repository: the hotfix (7.0.9.1), and the next release of OSS (7.0.10). The CVE issues are
  * in them. A freeze from 7.0.9-SNAPSHOT to 7.0.10-SNAPSHOT:
  *
- * - closes the tracker of the next release (commercial 7.0.10), and deletes it if it has no
- *   issues. The OSS release of it is made after this freeze, from the frozen branch that
- *   now has the fixes, and its issues are copied to OSS then.
+ * - closes the tracker of the next release (commercial 7.0.10), whether or not it has
+ *   issues: a milestone is never deleted. The OSS release of it is made after this freeze,
+ *   from the frozen branch that now has the fixes, and its issues are copied to OSS then.
  * - makes OSS 7.0.10, and the two that track the fixes of the new active branch: commercial
  *   7.0.10.1 and 7.0.11. A milestone that is there already is not made again.
- * - adds the link to the new OSS milestone to the commercial 7.0.10, if it is not deleted.
+ * - adds the link to the new OSS milestone to the commercial 7.0.10.
  *
  * A .0 version that is not made as the GA (7.0.0-M1, 7.0.0-RC1) keeps its version, and makes
  * nothing in OSS: the next milestone, release candidate or GA is planned by people. Its
@@ -25,12 +25,12 @@ import { candidateOf, openReleasesOf } from "./versions.js";
  * What is expected and not found is not an error (a project that has not been through a
  * freeze with this has none of them): it is a warning, and nothing is done for it. A
  * milestone of a hotfix that is not made (the active branch has nothing that frozen lacks)
- * is a tracker too, and is deleted if it has no issues.
+ * is a tracker too, and is closed.
  *
  * It returns { trackers, creates, links, warnings }:
  *
- * - trackers: milestones to close or delete, shaped like the releases of the plan, with
- *   `deleteIfEmpty: true`
+ * - trackers: milestones to close, shaped like the releases of the plan, with
+ *   `tracker: true`
  * - creates: { repository, title, exists, description? } to make if they do not exist
  * - links: { repository, title, ossRepository, ossTitle } the commercial milestone that
  *   gets the link to the OSS one, if it is still there once the trackers are closed
@@ -66,7 +66,6 @@ export function planMilestones({
     result.trackers.push({
       version: title,
       tracker: true,
-      deleteIfEmpty: true,
       of: [generation],
       milestone,
     });

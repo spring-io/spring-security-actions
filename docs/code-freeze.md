@@ -25,8 +25,8 @@ It runs with a **dry run on by default**: it plans, makes the merges and the ver
 4. **Ready**: `release-train-ready.yml` runs on each `release/<version>`, and the freeze waits for it. A release that is ready in the train already is skipped, and its branches are bumped all the same. Ready cannot be undone, so it comes after everything that can be checked, and before any bump is pushed.
 5. **Push**: the commercial repository, then OSS, each in one atomic push without force.
 6. **Milestones**, last, so a failed push leaves them as they were, and a dry run says what it would do and does nothing:
-   - [close-milestones](../close-milestones/README.md) closes the milestone of each release, in the OSS repository for the OSS and frozen releases, and in the commercial one for a hotfix and for long-term support. It closes the **trackers** too: the two commercial milestones that track the fixes of an active branch, the hotfix and the next release (see [the milestones of a cycle](#the-milestones-of-a-cycle)). A milestone with open issues is closed all the same, and the summary has the count. The milestone of a **hotfix, or of a tracker, that has no issues**, open or closed, is **deleted**.
-   - [open-milestones](../open-milestones/README.md) makes the milestones of the next cycle, and adds the link to the OSS milestone to the commercial one of the next release (unless that was deleted).
+   - [close-milestones](../close-milestones/README.md) closes the milestone of each release, in the OSS repository for the OSS and frozen releases, and in the commercial one for a hotfix and for long-term support. It closes the **trackers** too: the two commercial milestones that track the fixes of an active branch, the hotfix and the next release (see [the milestones of a cycle](#the-milestones-of-a-cycle)). A milestone with open issues is closed all the same, and the summary has the count. None is deleted, whether or not it has issues.
+   - [open-milestones](../open-milestones/README.md) makes the milestones of the next cycle, and adds the link to the OSS milestone to the commercial one of the next release.
 
 ### The next version
 
@@ -47,12 +47,12 @@ The active branch is at the version of the release that the frozen branch builds
 | What | Milestone | Repository |
 |---|---|---|
 | closed | `7.0.9` | OSS |
-| closed, deleted if it has no issues | `7.0.9.1` (the hotfix), `7.0.10` (the tracker of the next release) | commercial |
+| closed | `7.0.9.1` (the hotfix), `7.0.10` (the tracker of the next release) | commercial |
 | made | `7.0.10` | OSS |
 | made | `7.0.10.1`, `7.0.11` (the trackers of the new active branch) | commercial |
 | link added to the description | `7.0.10` gets `OSS milestone: <the URL of the OSS 7.0.10>` | commercial |
 
-The freeze makes the milestones with a title only. A milestone that is there already is left alone, and the link is added to the description without changing the rest of it. It is not added to a tracker that was deleted. The GA of a `.0` version (`7.0.0`, to `7.0.1-SNAPSHOT`) is the same: it closes `7.0.0.1` and `7.0.1`, and makes OSS `7.0.1` and commercial `7.0.1.1` and `7.0.2`.
+The freeze makes the milestones with a title only. A milestone that is there already is left alone, and the link is added to the description without changing the rest of it. The GA of a `.0` version (`7.0.0`, to `7.0.1-SNAPSHOT`) is the same: it closes `7.0.0.1` and `7.0.1`, and makes OSS `7.0.1` and commercial `7.0.1.1` and `7.0.2`.
 
 Before the GA of a `.0` version there is no hotfix, and the next milestone, release candidate or GA is planned by people, so **nothing is made in OSS**. Freezing `7.0.0-M1` closes the tracker of the open milestone after it (commercial `7.0.0-RC1`) and makes the tracker of the one after that (commercial `7.0.0`), only if its OSS milestone exists. If there is no open milestone left for `7.0.0`, the summary warns, and the next freeze would fail with `has no open milestone`.
 
@@ -163,7 +163,7 @@ Running the stub by accident changes nothing. Choose a branch that has the real 
 
 | Where | What for | Fine-grained token | Classic token |
 |---|---|---|---|
-| the commercial repository | check out, push the branches, run `release-train-ready.yml`, close and delete its milestones | **Contents: Read and write**, **Actions: Read and write**, **Issues: Read and write** | `repo` |
+| the commercial repository | check out, push the branches, run `release-train-ready.yml`, close its milestones | **Contents: Read and write**, **Actions: Read and write**, **Issues: Read and write** | `repo` |
 | the OSS repository | fetch, push the branches, close its milestones | **Contents: Read and write**, **Issues: Read and write** | `repo` |
 | the release train repository (`spring-io/release-train`, or `RELEASE_TRAIN_REPOSITORY`) | read the train | **Contents: Read** | `repo` |
 
@@ -171,7 +171,7 @@ Both repositories must let the token push to their protected branches (a bypass 
 
 ## Reading a run
 
-The summary has the versions of every branch, the releases marked ready with a link to each run, the merges in order, the pushes with the OSS leak check, the milestones that were closed or deleted, and the milestones of the next cycle. A dry run says so in the title.
+The summary has the versions of every branch, the releases marked ready with a link to each run, the merges in order, the pushes with the OSS leak check, the milestones that were closed, and the milestones of the next cycle. A dry run says so in the title.
 
 | What the run says | What to do |
 |---|---|

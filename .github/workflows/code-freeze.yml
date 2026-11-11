@@ -18,8 +18,8 @@ name: code-freeze
 #   4. Ready: release-train-ready.yml of the project runs on each release branch, and is waited for.
 #   5. Push: the commercial repository, then OSS, each in one atomic push, without force.
 #   6. Milestones: the milestone of each release is closed, and so are the two commercial ones that
-#      track the fixes of its active branch (the hotfix, and the next release): one with no issues is
-#      deleted. Then the milestones of the next cycle are made (the next OSS release, and the
+#      track the fixes of its active branch (the hotfix, and the next release). None is deleted. Then
+#      the milestones of the next cycle are made (the next OSS release, and the
 #      two that track the fixes of the new active branch), and the commercial milestone of the
 #      next release gets the link to the OSS one. This is last, so that a failed push leaves
 #      everything as it was, and the freeze can run again.
@@ -135,16 +135,14 @@ jobs:
         uses: spring-io/spring-security-actions/push-freeze@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           mode: push
-      # Last, so that a push that failed leaves the milestones open and the freeze can run again. A hotfix
-      # or a milestone that tracks the fixes of the active branch, with no issues, is deleted, and the
-      # others are closed, with open issues too.
+      # Last, so that a push that failed leaves the milestones open and the freeze can run again. Every
+      # milestone is closed, with open issues too, and none is deleted.
       - name: Close the milestones of the releases
         if: ${{ !inputs.dry-run }}
         uses: spring-io/spring-security-actions/close-milestones@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
-      # After the closing: a milestone that tracks the fixes and was deleted gets no link. One that
-      # is there already is left alone.
+      # After the closing. A milestone that is there already is left alone.
       - name: Make the milestones of the next cycle
         if: ${{ !inputs.dry-run }}
         uses: spring-io/spring-security-actions/open-milestones@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27

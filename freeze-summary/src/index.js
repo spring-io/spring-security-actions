@@ -113,12 +113,6 @@ const issues = (n) => `${n} open ${n === 1 ? "issue" : "issues"}`;
 /** What a dry run says about a milestone, from the plan: what the action would do with it. */
 const wouldBe = (release) => {
   const { milestone } = release;
-  if (
-    (release.hotfix || release.deleteIfEmpty) &&
-    milestone.open + milestone.closed === 0
-  ) {
-    return "Would be deleted, it has no issues";
-  }
   if (milestone.state === "closed") {
     return "Already closed";
   }
@@ -135,15 +129,13 @@ const doneResult = (result) => {
       return `Closed with ${issues(result.open)}`;
     case "already-closed":
       return "Already closed";
-    case "deleted":
-      return "Deleted, it had no issues";
     default:
       return `Failed: ${result.error}`;
   }
 };
 
 /**
- * The milestones that are closed (or deleted) after the pushes: those of the releases, and
+ * The milestones that are closed after the pushes: those of the releases, and
  * the trackers of the fixes of the active branches (a hotfix, and the next release).
  */
 export function milestonesTable(plan, milestones, dryRun) {
@@ -157,14 +149,13 @@ export function milestonesTable(plan, milestones, dryRun) {
           m.repository === milestone.repository,
       );
       const counts = done?.open !== undefined ? done : milestone;
-      const gone = done?.result === "deleted";
       const result = dryRun
         ? wouldBe(release)
         : done
           ? doneResult(done)
           : "Not closed, the freeze did not get to it";
       return [
-        gone || !milestone.url
+        !milestone.url
           ? release.version
           : `[${release.version}](${done?.url ?? milestone.url})`,
         milestone.repository,
@@ -234,10 +225,7 @@ export function openedTable(plan, opened, dryRun) {
       l.title,
       l.repository,
       `Link to the OSS milestone ${l.ossTitle}`,
-      result(
-        find("link", l.repository, l.title),
-        "Would be added, if the milestone is not deleted for having no issues",
-      ),
+      result(find("link", l.repository, l.title), "Would be added"),
     ]),
   ];
   return table(["Milestone", "Repository", "What", "Result"], rows);
@@ -314,7 +302,7 @@ export function render({
     )
   ) {
     parts.push(
-      `## Milestones closed\nEach release marked ready has its milestone closed once the pushes succeed, and so has the milestone that tracks the fixes of its active branch (the hotfix, and the next release). A milestone with open issues is closed all the same, and the count is shown. A hotfix, or a milestone that tracks the fixes, with no issues is deleted.\n\n${milestonesTable(plan, milestones, dryRun)}`,
+      `## Milestones closed\nEach release marked ready has its milestone closed once the pushes succeed, and so has the milestone that tracks the fixes of its active branch (the hotfix, and the next release). A milestone with open issues is closed all the same, and the count is shown. A milestone is closed whether or not it has issues, and none is deleted.\n\n${milestonesTable(plan, milestones, dryRun)}`,
     );
   }
   if (

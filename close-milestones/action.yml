@@ -1,5 +1,5 @@
 name: "close-milestones"
-description: "Closes the milestone of each release of a code freeze, and of the trackers of the fixes of the active branch, and deletes the milestone of a hotfix or of a tracker that has no issues"
+description: "Closes the milestone of each release of a code freeze, and of the trackers of the fixes of the active branch, and never deletes one"
 
 inputs:
   plan-file:
@@ -14,7 +14,7 @@ inputs:
 
 outputs:
   milestones-file:
-    description: "The file with the result for each milestone, as JSON: closed, closed-with-open, already-closed, deleted or failed."
+    description: "The file with the result for each milestone, as JSON: closed, closed-with-open, already-closed or failed."
 
 runs:
   using: "node24"

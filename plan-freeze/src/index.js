@@ -187,7 +187,7 @@ export async function planFreeze(
   const ossMilestones = await readMilestones(ossRepository);
   const commercialMilestones = await readMilestones(hostRepository);
 
-  /** The milestone of a release, to be closed (or deleted) after the freeze: undefined if there is none. */
+  /** The milestone of a release, to be closed after the freeze: undefined if there is none. */
   const milestoneOf = (milestones, repository, title) => {
     const found = milestones.find((m) => m.title === title);
     return (
