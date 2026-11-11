@@ -12,10 +12,13 @@ runs:
   using: "composite"
   steps:
     - name: Set up JDK ${{ inputs.java-version }}
-      uses: spring-io/spring-gradle-build-action@c8668747d7c264864c8c7f7026d0d277d14a78dc  # v2.0.6
+      uses: spring-io/spring-gradle-build-action@99a2aa4bd02e3a216fdbc574e256ec860f791d4c  # v2.0.7
       with:
         java-version: ${{ inputs.java-version }}
         distribution: "temurin"
+        # Write the Gradle cache on main and its embargoed counterparts; elsewhere keep the default of
+        # setup-gradle, which is read-only on every branch except the default one
+        cache-read-only: ${{ (github.ref_name == 'main' || github.ref_name == 'embargoed/frozen/main' || github.ref_name == 'embargoed/active/main') && 'false' || (github.event.repository != null && github.ref_name != github.event.repository.default_branch) }}
     - name: Build with Gradle
       uses: $/run-gradle
       with:
