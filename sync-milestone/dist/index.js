@@ -45177,12 +45177,6 @@ const RELEASE_TRAIN = /^\d{4}\.\d{2}\.\d{2}$/;
 /** The line that says the release is in a train. */
 const trainLine = (train) => `Release Train: ${train}`;
 
-const missingTrain = (train) =>
-  `ERROR: The Release Train ${train} doesn't exist`;
-
-const cannotJoin = (train, branch) =>
-  `ERROR: Cannot join the Release Train ${train}: ${branch} does not exist`;
-
 const cannotLeave = (train) =>
   `ERROR: Cannot leave the Release Train ${train}: it is ready`;
 
@@ -45321,12 +45315,377 @@ function dateOf(value) {
 // A milestone is due at noon UTC, which is the same day in every time zone.
 const noon = (date) => `${date}T12:00:00Z`;
 
+;// CONCATENATED MODULE: ./src/versions.js
+const SNAPSHOT = "-SNAPSHOT";
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The version a snapshot version is going to be released as: 7.0.9-SNAPSHOT gives 7.0.9. */
+function candidateOf(snapshotVersion) {
+  const version = (snapshotVersion ?? "").trim();
+  if (!version.endsWith(SNAPSHOT)) {
+    throw new Error(`"${version}" is not a snapshot version`);
+  }
+  const candidate = version.slice(0, -SNAPSHOT.length);
+  if (!/^\d+\.\d+\.\d+$/.test(candidate)) {
+    throw new Error(
+      `"${version}" has no release: expected <major>.<minor>.<patch>${SNAPSHOT}`,
+    );
+  }
+  return candidate;
+}
+
+// The order of the releases of a version: milestones, then release candidates, then the version.
+function releaseOrder(title, candidate) {
+  const match = title.slice(candidate.length).match(/^-(M|RC)(\d+)$/);
+  if (!match) {
+    return [2, 0];
+  }
+  return [match[1] === "M" ? 0 : 1, Number(match[2])];
+}
+
+/**
+ * The titles of the open milestones of a .0 version in the order that they are released
+ * (7.2.0-M2, 7.2.0-RC1, 7.2.0), by due date (none is last), and for one day milestones, then
+ * release candidates, then the version. The first is the release that is made now.
+ */
+function openReleasesOf(candidate, milestones) {
+  const pattern = new RegExp(`^${escapeRegExp(candidate)}(-(M|RC)\\d+)?$`);
+  const dueOf = (m) => (m.due_on ? Date.parse(m.due_on) : Infinity);
+  return milestones
+    .filter((m) => m.state === "open" && pattern.test(m.title))
+    .sort((a, b) => {
+      const dueA = dueOf(a);
+      const dueB = dueOf(b);
+      if (dueA !== dueB) {
+        return dueA < dueB ? -1 : 1;
+      }
+      const [kindA, numberA] = releaseOrder(a.title, candidate);
+      const [kindB, numberB] = releaseOrder(b.title, candidate);
+      return kindA - kindB || numberA - numberB;
+    })
+    .map((m) => m.title);
+}
+
+;// CONCATENATED MODULE: ./src/rebuild.js
+
+
+
+
+
+const RELEASE_WORKFLOW = "release-branches.yml";
+const FREEZE_WORKFLOW = "code-freeze.yml";
+
+const pause = (milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const VERSION_LINE = /^version=([^\r\n]*)/m;
+
+/** The version of gradle.properties on a branch, or "" if there is none. */
+async function versionOn(octokit, { owner, repo }, branch) {
+  try {
+    const { data } = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: "gradle.properties",
+      ref: branch,
+    });
+    const text = Buffer.from(data.content, "base64").toString("utf8");
+    return VERSION_LINE.exec(text)?.[1]?.trim() ?? "";
+  } catch (error) {
+    if (error.status === 404) {
+      return "";
+    }
+    throw error;
+  }
+}
+
+/**
+ * The embargoed branches of the commercial repository that the release workflow builds, and
+ * the release that each one builds now:
+ *
+ * - embargoed/frozen/<generation> builds the release of its version (7.0.10-SNAPSHOT is
+ *   7.0.10; a .0 version is the open milestone of it with the earliest due date), and the
+ *   snapshot branch of it.
+ * - embargoed/active/<generation> builds the hotfix of that release (7.0.10.1). A .0 version
+ *   has one only for its GA.
+ * - embargoed/lts/<generation> builds its own version (5.8.31).
+ *
+ * `train` is the name of the train that the release is due in, and "" if it has none: the
+ * OSS milestone of the release (or of the release that a hotfix fixes) has its due date, and
+ * a long-term support milestone names it in its description.
+ */
+async function discover(octokit, { oss, host }) {
+  const target = parseRepository(host);
+  const names = (
+    await call(
+      `Reading the branches of ${host}`,
+      octokit.paginate(octokit.rest.repos.listBranches, {
+        ...target,
+        per_page: 100,
+      }),
+    )
+  ).map((b) => b.name);
+  const milestones = async (repository) => {
+    const { owner, repo } = parseRepository(repository);
+    return call(
+      `Reading the milestones of ${repository}`,
+      octokit.paginate(octokit.rest.issues.listMilestones, {
+        owner,
+        repo,
+        state: "all",
+        per_page: 100,
+      }),
+    );
+  };
+  const ossMilestones = await milestones(oss);
+  const hostMilestones = await milestones(host);
+  const trainOfOss = (title) =>
+    trainOfDate(dateOf(ossMilestones.find((m) => m.title === title)?.due_on));
+
+  const items = [];
+  const notes = [];
+  const releases = new Map();
+  for (const branch of names.filter((n) => n.startsWith("embargoed/frozen/"))) {
+    const version = await versionOn(octokit, target, branch);
+    let candidate;
+    try {
+      candidate = candidateOf(version);
+    } catch {
+      notes.push(`${branch} has no release version (${version || "none"})`);
+      continue;
+    }
+    const release = candidate.endsWith(".0")
+      ? (openReleasesOf(candidate, ossMilestones)[0] ?? "")
+      : candidate;
+    if (!release) {
+      notes.push(`${branch} (${version}) has no open milestone in ${oss}`);
+      continue;
+    }
+    const generation = branch.slice("embargoed/frozen/".length);
+    releases.set(generation, { release, candidate });
+    items.push({ kind: "frozen", branch, release, train: trainOfOss(release) });
+  }
+  for (const branch of names.filter((n) => n.startsWith("embargoed/active/"))) {
+    const generation = branch.slice("embargoed/active/".length);
+    const frozen = releases.get(generation);
+    if (!frozen) {
+      notes.push(`${branch} has no frozen branch to take its release from`);
+      continue;
+    }
+    // a milestone or a release candidate of a .0 version has no hotfix
+    if (
+      frozen.candidate.endsWith(".0") &&
+      frozen.release !== frozen.candidate
+    ) {
+      continue;
+    }
+    items.push({
+      kind: "active",
+      branch,
+      release: `${frozen.release}.1`,
+      train: trainOfOss(frozen.release),
+    });
+  }
+  for (const branch of names.filter((n) => n.startsWith("embargoed/lts/"))) {
+    const version = await versionOn(octokit, target, branch);
+    let release;
+    try {
+      release = candidateOf(version);
+    } catch {
+      notes.push(`${branch} has no release version (${version || "none"})`);
+      continue;
+    }
+    const milestone = hostMilestones.find((m) => m.title === release);
+    items.push({
+      kind: "lts",
+      branch,
+      release,
+      train: trainOf(milestone?.description),
+    });
+  }
+  return { items, notes };
+}
+
+/** Whether a run of the code freeze is going on in the commercial repository. */
+async function freezeRunning(octokit, host) {
+  const { owner, repo } = parseRepository(host);
+  for (const status of ["in_progress", "queued"]) {
+    try {
+      const { data } = await octokit.rest.actions.listWorkflowRuns({
+        owner,
+        repo,
+        workflow_id: FREEZE_WORKFLOW,
+        status,
+        per_page: 1,
+      });
+      if (data.total_count > 0) {
+        return true;
+      }
+    } catch (error) {
+      // a repository that has no code freeze workflow has no freeze going on
+      if (error.status === 404) {
+        return false;
+      }
+      throw error;
+    }
+  }
+  return false;
+}
+
+/**
+ * Starts the release workflow on a branch, and waits until its run has ended. The run is
+ * the newest run by hand of that branch that was made since the start.
+ */
+async function startAndWait(
+  octokit,
+  host,
+  branch,
+  { sleep, intervalMs, timeoutMs },
+) {
+  const { owner, repo } = parseRepository(host);
+  const started = Date.now();
+  await call(
+    `Starting ${RELEASE_WORKFLOW} on ${branch} of ${host}`,
+    octokit.rest.actions.createWorkflowDispatch({
+      owner,
+      repo,
+      workflow_id: RELEASE_WORKFLOW,
+      ref: branch,
+    }),
+  );
+  for (;;) {
+    const { data } = await octokit.rest.actions.listWorkflowRuns({
+      owner,
+      repo,
+      workflow_id: RELEASE_WORKFLOW,
+      branch,
+      event: "workflow_dispatch",
+      per_page: 10,
+    });
+    const run = data.workflow_runs
+      .filter((r) => Date.parse(r.created_at) >= started - 10_000)
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+    if (run?.status === "completed") {
+      return { conclusion: run.conclusion, url: run.html_url };
+    }
+    if (Date.now() - started > timeoutMs) {
+      throw new Error(
+        `The run of ${RELEASE_WORKFLOW} on ${branch} did not end in ${Math.round(timeoutMs / 60000)} minutes`,
+      );
+    }
+    await sleep(intervalMs);
+  }
+}
+
+/**
+ * Rebuilds the release branches: starts the release workflow on the embargoed branches, which
+ * builds `release/<version>` and the snapshot branch again from the pushed commit, with the
+ * dependency updates of the release train if there is one, and joins it. The frozen and the
+ * long-term support branches go first, in parallel, and the active ones after them, as a hotfix
+ * has the release merged in and must find the new one.
+ *
+ * Nothing is rebuilt
+ * - while the code freeze is running, as it marks releases ready and bumps the versions,
+ * - for a release that is ready in its train, which cannot be changed any more.
+ *
+ * `only` limits it to some releases (7.0.10 and its hotfix 7.0.10.1). A branch that has
+ * nothing to build is not an error: the run of the workflow ends with "Nothing to build". Only
+ * a run that fails is a failure. With `dryRun` it says what it would do and starts nothing.
+ */
+async function rebuildReleases(
+  { repository, repositories, project, trainRepository, only, dryRun = false },
+  {
+    octokit,
+    log = () => {},
+    sleep = pause,
+    intervalMs = 15000,
+    timeoutMs = 90 * 60 * 1000,
+  },
+) {
+  const { oss, host } = repositories;
+  const results = [];
+  const record = (item, result, reason = "") => {
+    results.push({
+      branch: item.branch,
+      release: item.release,
+      result,
+      reason,
+    });
+    log(
+      `${item.branch} (${item.release}): ${result}${reason ? `, ${reason}` : ""}`,
+    );
+  };
+  if (await freezeRunning(octokit, host)) {
+    log("The code freeze is running: nothing is rebuilt");
+    return { results, skipped: "freeze" };
+  }
+  const { items, notes } = await discover(octokit, { oss, host });
+  notes.forEach((n) => log(n));
+  const trains = new Map();
+  const trainOfItem = async (name) => {
+    if (!trains.has(name)) {
+      trains.set(name, await readTrain(octokit, trainRepository, name));
+    }
+    return trains.get(name);
+  };
+  const wanted = [];
+  for (const item of items) {
+    if (only && !only.includes(item.release)) {
+      continue;
+    }
+    if (item.train) {
+      const train = await trainOfItem(item.train);
+      if (train.found && hashesOf(train, project, item.release).ready) {
+        record(item, "skipped", `${item.release} is ready in ${item.train}`);
+        continue;
+      }
+    }
+    wanted.push(item);
+  }
+  const rebuild = async (item) => {
+    if (dryRun) {
+      record(item, "would rebuild");
+      return;
+    }
+    try {
+      const { conclusion, url } = await startAndWait(
+        octokit,
+        host,
+        item.branch,
+        {
+          sleep,
+          intervalMs,
+          timeoutMs,
+        },
+      );
+      if (conclusion === "success") {
+        record(item, "rebuilt", url);
+      } else {
+        record(item, "failed", `the run ended as ${conclusion}: ${url}`);
+      }
+    } catch (error) {
+      if (error.status === 404 || /404/.test(error.message)) {
+        record(item, "skipped", `${RELEASE_WORKFLOW} is not on ${item.branch}`);
+        return;
+      }
+      record(item, "failed", error.message);
+    }
+  };
+  await Promise.all(
+    wanted.filter((i) => i.kind !== "active").map((i) => rebuild(i)),
+  );
+  for (const item of wanted.filter((i) => i.kind === "active")) {
+    await rebuild(item);
+  }
+  return { results };
+}
+
 ;// CONCATENATED MODULE: ./src/sync.js
 
 
 
 
-const JOIN_WORKFLOW = "release-train-join.yml";
+
 const LEAVE_WORKFLOW = "release-train-leave.yml";
 
 const RELEASE = /^\d+\.\d+\.\d+(-(M|RC)\d+)?$/;
@@ -45354,10 +45713,16 @@ function repositoriesOf(repository) {
  * A long-term support version (5.8.30) is only in the commercial repository, and its
  * description names its train (typed by a person): the due date follows the train.
  *
- * - A train that does not exist, or has no commercial general availability: the due date
- *   is cleared, and the description says ERROR: and why.
- * - A release branch (release/7.0.9) that does not exist cannot join: the description says
- *   so.
+ * - A due date is kept when its train does not exist (yet): the milestones just have no
+ *   train line, and the line comes once the release is in the train. A train that has no
+ *   commercial general availability makes the hotfix say ERROR: and why.
+ * - A release is never joined here. The release workflow joins it, once it has built the
+ *   release branch, so that the branch has the dependency updates of the train. A release
+ *   that is not built is not joined, which is not an error. When the due date (or the line of
+ *   a long-term support milestone) changes, the release leaves the train that it was in, and
+ *   its branches are built again, which joins the new one (see rebuildReleases).
+ * - The line is written when the train says that the release has joined, or with `dispatch`
+ *   false, which is for the release workflow, right after it joined.
  * - A release that joined a train that it is not due in any more leaves it (the previous
  *   train is known from the previous due date, or from the line that the description had).
  *   If that train is ready it cannot, and the description says so, and nothing is changed.
@@ -45374,8 +45739,9 @@ function repositoriesOf(repository) {
  * so it does not run it again).
  *
  * `changes` is the field `changes` of the event of GitHub, with what the edit changed
- * (due_on, description or title, each with `from`). `dispatch` false does not run the
- * workflows to join and leave: it is for after the join was made, to write the lines.
+ * (due_on, description or title, each with `from`). `dispatch` false runs nothing (no leave,
+ * no rebuild) and takes the releases as joined: it is for after the release workflow joined,
+ * to write the lines. `rebuild` false does not start the rebuild (the nightly run does it).
  */
 async function syncMilestone(
   {
@@ -45385,10 +45751,11 @@ async function syncMilestone(
     project,
     trainRepository,
     dispatch = true,
+    rebuild = true,
     override = false,
     dryRun = false,
   },
-  { octokit, log = () => {} },
+  { octokit, log = () => {}, ...timing },
 ) {
   const { oss, host } = repositoriesOf(repository);
   const actions = [];
@@ -45520,29 +45887,38 @@ async function syncMilestone(
     );
   };
 
-  // { line } is the error line if it cannot be joined, and nothing if it is in the train
-  const join = async (version, destination, train) => {
-    if (hashesOf(train, project, version).joined) {
-      return {};
+  // whether the train says that the release is in it (or, with dispatch false, as it was just joined)
+  const joinedIn = (version, train) =>
+    !dispatch || Boolean(hashesOf(train, project, version).joined);
+
+  // starts the release workflow on the branches of the releases, which builds them against the
+  // train and joins it
+  const rebuildAfterChange = async (versions) => {
+    if (!dispatch || !rebuild) {
+      return;
     }
-    if (!(await releaseExists(version))) {
+    const { results } = await rebuildReleases(
+      {
+        repositories: { oss, host },
+        project,
+        trainRepository,
+        only: versions,
+        dryRun,
+      },
+      { octokit, log, ...timing },
+    );
+    for (const r of results) {
+      events.push({ type: "rebuild", branch: r.branch, result: r.result });
       note(
-        `release/${version} does not exist, so it cannot join ${train.branch}`,
-      );
-      return { line: cannotJoin(train.branch, `release/${version}`) };
-    }
-    if (dispatch) {
-      await run(JOIN_WORKFLOW, version, {
-        "deployment-destination": destination,
-        "release-train": train.branch,
-        "release-train-repository": trainRepository,
-      });
-      events.push({ type: "join", version, train: train.branch });
-      note(
-        `${version} ${dryRun ? "would join" : "joins"} the release train ${train.branch}`,
+        `${r.branch} (${r.release}): ${dryRun ? "would be rebuilt" : r.result}${r.reason ? `, ${r.reason}` : ""}`,
       );
     }
-    return {};
+    const failed = results.filter((r) => r.result === "failed");
+    if (failed.length > 0) {
+      throw new Error(
+        `The release workflow failed: ${failed.map((r) => `${r.branch}: ${r.reason}`).join("; ")}`,
+      );
+    }
   };
 
   /**
@@ -45627,47 +46003,42 @@ async function syncMilestone(
       return;
     }
 
+    // The date is kept. The line is there once the train says that the release is in it, and
+    // a train that does not exist (yet) has none. The hotfix is due on the commercial general
+    // availability of the train, which is not known without one: its due date stays.
     let ossLine = "";
     let hotLine = "";
     let hotDate;
-    let mirrorDate = null;
-    let clearOss = false;
+    let train;
     if (name) {
-      const train = await trainNamed(name);
-      if (!train.found) {
-        note(
-          `The release train ${name} does not exist: the due date is cleared`,
-        );
-        ossLine = hotLine = missingTrain(name);
-        clearOss = true;
-        hotDate = null;
-      } else {
-        mirrorDate = date;
-        const joined = await join(ossTitle, "Maven Central", train);
-        ossLine = joined.line ?? trainLine(name);
+      train = await trainNamed(name);
+      if (train.found) {
+        ossLine = joinedIn(ossTitle, train) ? trainLine(name) : "";
         if (hotfix) {
           const availability = commercialAvailability(train);
           if (!availability) {
             hotLine = noAvailability(name);
           } else {
             hotDate = availability;
-            const hotJoined = await join(hotTitle, "Spring Enterprise", train);
-            hotLine = hotJoined.line ?? trainLine(name);
+            hotLine = joinedIn(hotTitle, train) ? trainLine(name) : "";
           }
         }
+      } else {
+        note(
+          `The release train ${name} does not exist yet: the due date is kept, and the milestones have no train line`,
+        );
       }
     } else {
       hotDate = null;
     }
 
     await write(oss, found, {
-      ...(clearOss && { date: null }),
       description: withFirstLine(found.description, ossLine),
     });
     if (mirror) {
       // the same first line as the OSS milestone, and the link to it after the text
       await write(host, mirror, {
-        date: mirrorDate,
+        date: date || null,
         description: withFirstLine(
           withLink(mirror.description, found.html_url),
           ossLine,
@@ -45679,6 +46050,15 @@ async function syncMilestone(
         ...(hotDate !== undefined && { date: hotDate }),
         description: hotLine,
       });
+    }
+    // the due date moved, and the train that it is in now has not got the release: build it
+    // again, which joins it
+    if (
+      changes?.due_on &&
+      train?.found &&
+      !hashesOf(train, project, ossTitle).joined
+    ) {
+      await rebuildAfterChange(versions);
     }
   };
 
@@ -45713,13 +46093,13 @@ async function syncMilestone(
       await write(host, found, { date: null });
       return;
     }
+    // the line is what a person typed, and is left as it is. A train that does not exist (yet)
+    // keeps the due date as it is, and nothing is joined.
     const train = await trainNamed(name);
     if (!train.found) {
-      note(`The release train ${name} does not exist: the due date is cleared`);
-      await write(host, found, {
-        date: null,
-        description: withTrainLine(found.description, missingTrain(name)),
-      });
+      note(
+        `The release train ${name} does not exist yet: nothing is changed, and the release is not joined`,
+      );
       return;
     }
     const availability = commercialAvailability(train);
@@ -45729,14 +46109,10 @@ async function syncMilestone(
       });
       return;
     }
-    const joined = await join(ltsTitle, "Spring Enterprise", train);
-    await write(host, found, {
-      date: availability,
-      description: withTrainLine(
-        found.description,
-        joined.line ?? trainLine(name),
-      ),
-    });
+    await write(host, found, { date: availability });
+    if (changes?.description && !hashesOf(train, project, ltsTitle).joined) {
+      await rebuildAfterChange([ltsTitle]);
+    }
   };
 
   if (!RELEASE.test(title) && !HOTFIX.test(title)) {
@@ -45867,6 +46243,7 @@ async function syncAll(
         project,
         trainRepository,
         dispatch,
+        rebuild: false,
         dryRun,
       },
       { octokit, log },
@@ -45881,8 +46258,8 @@ async function syncAll(
       milestones: results.length,
       descriptions: count((e) => e.type === "update" && e.description),
       dueDates: count((e) => e.type === "update" && e.due),
-      joins: count((e) => e.type === "join"),
       leaves: count((e) => e.type === "leave"),
+      rebuilds: count((e) => e.type === "rebuild"),
     },
   };
 }
@@ -45913,6 +46290,7 @@ function table(header, rows) {
 }
 
 ;// CONCATENATED MODULE: ./src/index.js
+
 
 
 
@@ -45972,13 +46350,20 @@ async function verdictOf(octokit, { repository, milestone, sender }) {
   return { skip: !override, override };
 }
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const plural = (n, word) =>
+  `${n} ${n === 1 ? word : word.replace(/ch$/, "che") + "s"}`;
 
 /**
  * The summary of a run over all the milestones, as markdown: what each one did (or would do),
  * and the totals.
  */
-function renderAll({ repository, dryRun, results, totals }) {
+function renderAll({
+  repository,
+  dryRun,
+  results,
+  totals,
+  rebuilds = [],
+}) {
   const lines = [
     `# Sync of all the milestones of ${repository}${dryRun ? "     DRY RUN: nothing was written or run" : ""}`,
     "",
@@ -45992,9 +46377,19 @@ function renderAll({ repository, dryRun, results, totals }) {
       "",
     );
   }
+  if (rebuilds.length > 0) {
+    lines.push("## Rebuilds of the release branches", "");
+    lines.push(
+      ...rebuilds.map(
+        (r) =>
+          `- ${r.branch} (${r.release}): ${r.result}${r.reason ? `, ${r.reason}` : ""}`,
+      ),
+      "",
+    );
+  }
   const verb = dryRun ? "would" : "did";
   lines.push(
-    `**Totals:** ${plural(totals.milestones, "milestone")} looked at. ${plural(totals.descriptions, "description")} ${verb} change, ${plural(totals.dueDates, "due date")}, ${plural(totals.joins, "release")} ${verb} join a train, ${plural(totals.leaves, "release")} ${verb} leave one.`,
+    `**Totals:** ${plural(totals.milestones, "milestone")} looked at. ${plural(totals.descriptions, "description")} ${verb} change, ${plural(totals.dueDates, "due date")}, ${plural(totals.leaves, "release")} ${verb} leave a train${rebuilds.length > 0 ? `, ${plural(rebuilds.filter((r) => ["rebuilt", "would rebuild"].includes(r.result)).length, "branch")} ${dryRun ? "would be" : "were"} rebuilt` : ""}.`,
     "",
   );
   return lines.join("\n");
@@ -46014,9 +46409,35 @@ async function mainAll(octokit, repository) {
     },
     { octokit, log: (line) => info(line) },
   );
+  let rebuilds = [];
+  if (getInput("rebuild") === "true") {
+    ({ results: rebuilds } = await rebuildReleases(
+      {
+        repositories: repositoriesOf(repository),
+        project: getInput("project") || oss.split("/")[1],
+        trainRepository:
+          getInput("release-train-repository") ||
+          "spring-io/release-train",
+        dryRun,
+      },
+      { octokit, log: (line) => info(line) },
+    ));
+  }
   setOutput("skipped", "false");
-  setOutput("changed", String(results.some((r) => r.events.length > 0)));
-  addSummary(renderAll({ repository, dryRun, results, totals }));
+  setOutput(
+    "changed",
+    String(
+      results.some((r) => r.events.length > 0) ||
+        rebuilds.some((r) => r.result === "rebuilt"),
+    ),
+  );
+  addSummary(renderAll({ repository, dryRun, results, totals, rebuilds }));
+  const failed = rebuilds.filter((r) => r.result === "failed");
+  if (failed.length > 0) {
+    throw new Error(
+      `The release workflow failed on ${failed.length} ${failed.length === 1 ? "branch" : "branches"}: ${failed.map((r) => `${r.branch} (${r.reason})`).join("; ")}`,
+    );
+  }
 }
 
 async function main() {

@@ -1,7 +1,5 @@
 import {
-  cannotJoin,
   cannotLeave,
-  missingTrain,
   noAvailability,
   trainLine,
   trainOf,
@@ -11,6 +9,7 @@ import {
   withTrainLine,
 } from "./descriptions.js";
 import { call, parseRepository } from "./octokit.js";
+import { rebuildReleases } from "./rebuild.js";
 import {
   commercialAvailability,
   dateOf,
@@ -19,7 +18,6 @@ import {
   readTrain,
 } from "./trains.js";
 
-export const JOIN_WORKFLOW = "release-train-join.yml";
 export const LEAVE_WORKFLOW = "release-train-leave.yml";
 
 const RELEASE = /^\d+\.\d+\.\d+(-(M|RC)\d+)?$/;
@@ -47,10 +45,16 @@ export function repositoriesOf(repository) {
  * A long-term support version (5.8.30) is only in the commercial repository, and its
  * description names its train (typed by a person): the due date follows the train.
  *
- * - A train that does not exist, or has no commercial general availability: the due date
- *   is cleared, and the description says ERROR: and why.
- * - A release branch (release/7.0.9) that does not exist cannot join: the description says
- *   so.
+ * - A due date is kept when its train does not exist (yet): the milestones just have no
+ *   train line, and the line comes once the release is in the train. A train that has no
+ *   commercial general availability makes the hotfix say ERROR: and why.
+ * - A release is never joined here. The release workflow joins it, once it has built the
+ *   release branch, so that the branch has the dependency updates of the train. A release
+ *   that is not built is not joined, which is not an error. When the due date (or the line of
+ *   a long-term support milestone) changes, the release leaves the train that it was in, and
+ *   its branches are built again, which joins the new one (see rebuildReleases).
+ * - The line is written when the train says that the release has joined, or with `dispatch`
+ *   false, which is for the release workflow, right after it joined.
  * - A release that joined a train that it is not due in any more leaves it (the previous
  *   train is known from the previous due date, or from the line that the description had).
  *   If that train is ready it cannot, and the description says so, and nothing is changed.
@@ -67,8 +71,9 @@ export function repositoriesOf(repository) {
  * so it does not run it again).
  *
  * `changes` is the field `changes` of the event of GitHub, with what the edit changed
- * (due_on, description or title, each with `from`). `dispatch` false does not run the
- * workflows to join and leave: it is for after the join was made, to write the lines.
+ * (due_on, description or title, each with `from`). `dispatch` false runs nothing (no leave,
+ * no rebuild) and takes the releases as joined: it is for after the release workflow joined,
+ * to write the lines. `rebuild` false does not start the rebuild (the nightly run does it).
  */
 export async function syncMilestone(
   {
@@ -78,10 +83,11 @@ export async function syncMilestone(
     project,
     trainRepository,
     dispatch = true,
+    rebuild = true,
     override = false,
     dryRun = false,
   },
-  { octokit, log = () => {} },
+  { octokit, log = () => {}, ...timing },
 ) {
   const { oss, host } = repositoriesOf(repository);
   const actions = [];
@@ -213,29 +219,38 @@ export async function syncMilestone(
     );
   };
 
-  // { line } is the error line if it cannot be joined, and nothing if it is in the train
-  const join = async (version, destination, train) => {
-    if (hashesOf(train, project, version).joined) {
-      return {};
+  // whether the train says that the release is in it (or, with dispatch false, as it was just joined)
+  const joinedIn = (version, train) =>
+    !dispatch || Boolean(hashesOf(train, project, version).joined);
+
+  // starts the release workflow on the branches of the releases, which builds them against the
+  // train and joins it
+  const rebuildAfterChange = async (versions) => {
+    if (!dispatch || !rebuild) {
+      return;
     }
-    if (!(await releaseExists(version))) {
+    const { results } = await rebuildReleases(
+      {
+        repositories: { oss, host },
+        project,
+        trainRepository,
+        only: versions,
+        dryRun,
+      },
+      { octokit, log, ...timing },
+    );
+    for (const r of results) {
+      events.push({ type: "rebuild", branch: r.branch, result: r.result });
       note(
-        `release/${version} does not exist, so it cannot join ${train.branch}`,
-      );
-      return { line: cannotJoin(train.branch, `release/${version}`) };
-    }
-    if (dispatch) {
-      await run(JOIN_WORKFLOW, version, {
-        "deployment-destination": destination,
-        "release-train": train.branch,
-        "release-train-repository": trainRepository,
-      });
-      events.push({ type: "join", version, train: train.branch });
-      note(
-        `${version} ${dryRun ? "would join" : "joins"} the release train ${train.branch}`,
+        `${r.branch} (${r.release}): ${dryRun ? "would be rebuilt" : r.result}${r.reason ? `, ${r.reason}` : ""}`,
       );
     }
-    return {};
+    const failed = results.filter((r) => r.result === "failed");
+    if (failed.length > 0) {
+      throw new Error(
+        `The release workflow failed: ${failed.map((r) => `${r.branch}: ${r.reason}`).join("; ")}`,
+      );
+    }
   };
 
   /**
@@ -320,47 +335,42 @@ export async function syncMilestone(
       return;
     }
 
+    // The date is kept. The line is there once the train says that the release is in it, and
+    // a train that does not exist (yet) has none. The hotfix is due on the commercial general
+    // availability of the train, which is not known without one: its due date stays.
     let ossLine = "";
     let hotLine = "";
     let hotDate;
-    let mirrorDate = null;
-    let clearOss = false;
+    let train;
     if (name) {
-      const train = await trainNamed(name);
-      if (!train.found) {
-        note(
-          `The release train ${name} does not exist: the due date is cleared`,
-        );
-        ossLine = hotLine = missingTrain(name);
-        clearOss = true;
-        hotDate = null;
-      } else {
-        mirrorDate = date;
-        const joined = await join(ossTitle, "Maven Central", train);
-        ossLine = joined.line ?? trainLine(name);
+      train = await trainNamed(name);
+      if (train.found) {
+        ossLine = joinedIn(ossTitle, train) ? trainLine(name) : "";
         if (hotfix) {
           const availability = commercialAvailability(train);
           if (!availability) {
             hotLine = noAvailability(name);
           } else {
             hotDate = availability;
-            const hotJoined = await join(hotTitle, "Spring Enterprise", train);
-            hotLine = hotJoined.line ?? trainLine(name);
+            hotLine = joinedIn(hotTitle, train) ? trainLine(name) : "";
           }
         }
+      } else {
+        note(
+          `The release train ${name} does not exist yet: the due date is kept, and the milestones have no train line`,
+        );
       }
     } else {
       hotDate = null;
     }
 
     await write(oss, found, {
-      ...(clearOss && { date: null }),
       description: withFirstLine(found.description, ossLine),
     });
     if (mirror) {
       // the same first line as the OSS milestone, and the link to it after the text
       await write(host, mirror, {
-        date: mirrorDate,
+        date: date || null,
         description: withFirstLine(
           withLink(mirror.description, found.html_url),
           ossLine,
@@ -372,6 +382,15 @@ export async function syncMilestone(
         ...(hotDate !== undefined && { date: hotDate }),
         description: hotLine,
       });
+    }
+    // the due date moved, and the train that it is in now has not got the release: build it
+    // again, which joins it
+    if (
+      changes?.due_on &&
+      train?.found &&
+      !hashesOf(train, project, ossTitle).joined
+    ) {
+      await rebuildAfterChange(versions);
     }
   };
 
@@ -406,13 +425,13 @@ export async function syncMilestone(
       await write(host, found, { date: null });
       return;
     }
+    // the line is what a person typed, and is left as it is. A train that does not exist (yet)
+    // keeps the due date as it is, and nothing is joined.
     const train = await trainNamed(name);
     if (!train.found) {
-      note(`The release train ${name} does not exist: the due date is cleared`);
-      await write(host, found, {
-        date: null,
-        description: withTrainLine(found.description, missingTrain(name)),
-      });
+      note(
+        `The release train ${name} does not exist yet: nothing is changed, and the release is not joined`,
+      );
       return;
     }
     const availability = commercialAvailability(train);
@@ -422,14 +441,10 @@ export async function syncMilestone(
       });
       return;
     }
-    const joined = await join(ltsTitle, "Spring Enterprise", train);
-    await write(host, found, {
-      date: availability,
-      description: withTrainLine(
-        found.description,
-        joined.line ?? trainLine(name),
-      ),
-    });
+    await write(host, found, { date: availability });
+    if (changes?.description && !hashesOf(train, project, ltsTitle).joined) {
+      await rebuildAfterChange([ltsTitle]);
+    }
   };
 
   if (!RELEASE.test(title) && !HOTFIX.test(title)) {
@@ -560,6 +575,7 @@ export async function syncAll(
         project,
         trainRepository,
         dispatch,
+        rebuild: false,
         dryRun,
       },
       { octokit, log },
@@ -574,8 +590,8 @@ export async function syncAll(
       milestones: results.length,
       descriptions: count((e) => e.type === "update" && e.description),
       dueDates: count((e) => e.type === "update" && e.due),
-      joins: count((e) => e.type === "join"),
       leaves: count((e) => e.type === "leave"),
+      rebuilds: count((e) => e.type === "rebuild"),
     },
   };
 }

@@ -4,19 +4,24 @@ name: sync-milestone
 # edited, in the OSS repository or in the commercial one, and what it does is in the action:
 #
 #   - The due date of the OSS milestone of a release (7.0.9) is the date of its release train
-#     (2026-11-19 is the train 2026.11.19). The release, release/7.0.9, joins it; the hotfix,
-#     release/7.0.9.1, joins it too, and its milestone is due on the commercial general availability of
-#     the train. The commercial milestone of the release follows the due date, and has the same line
-#     as the OSS milestone.
+#     (2026-11-19 is the train 2026.11.19). The release, release/7.0.9, and the hotfix, release/7.0.9.1,
+#     join it, but not here: the release workflow joins them, when it builds the branches against the
+#     train. The milestone of the hotfix is due on the commercial general availability of the train. The
+#     commercial milestone of the release follows the due date, and has the same line as the OSS
+#     milestone.
 #   - The commercial milestone of a long-term support version (5.8.30) names its train in its
 #     description, `Release Train: 2026.11.19`, and is due on the commercial general availability of it.
-#   - A release that was in another train leaves it first. A train that does not exist clears the due
-#     date, and the description says ERROR: and why. So does a release branch that does not exist.
+#   - A release that was in another train leaves it first, and the release workflow is started on its
+#     embargoed branches to join the new one. A due date whose train does not exist (yet) is kept, with no
+#     line. A release branch that does not exist is not joined, which is not an error.
 #   - An edit of the commercial milestone of an OSS version, or of its hotfix, is put right from the
 #     OSS milestone.
 #
 # By hand, it can sync one milestone (and what follows it), or all of them (all), and the dry run only
-# says what it would do: see docs/milestones.md.
+# says what it would do. Every night the caller runs it with all and rebuild: the milestones are synced,
+# and the release workflow is started on the embargoed branches (until the release is ready), so that
+# every branch is built again with the dependency updates that the train has, and tested. See
+# docs/milestones.md.
 #
 # An edit by the user of the token is the one of this workflow, and is left alone, unless the description
 # starts with ! (the owner of the token asking for a run: the ! is taken out, and it runs once).
@@ -40,6 +45,11 @@ on:
         default: ""
       all:
         description: "Sync every open milestone of the project that has a release, for a run by hand"
+        type: boolean
+        required: false
+        default: false
+      rebuild:
+        description: "With all, start the release workflow on the embargoed branches, so that each release is built again against its train and joins it (the nightly run)"
         type: boolean
         required: false
         default: false
@@ -70,7 +80,7 @@ on:
         default: ubuntu-latest
     secrets:
       RELEASE_AUTOMATION_TOKEN:
-        description: "The token that writes the milestones of both repositories (Issues: Read and write), reads the release train repository (Contents: Read-only), and runs the workflows Release Train - Join and Leave on the release branches (Actions: Read and write)"
+        description: "The token that writes the milestones of both repositories (Issues: Read and write), reads the release train repository (Contents: Read-only), and runs the workflow Release Train - Leave on the release branches and the release workflow on the embargoed branches (Actions: Read and write)"
         required: true
 
 permissions:
@@ -95,6 +105,7 @@ jobs:
           repository: ${{ inputs.repository }}
           milestone: ${{ inputs.milestone }}
           all: ${{ inputs.all }}
+          rebuild: ${{ inputs.rebuild }}
           dry-run: ${{ inputs.dry-run }}
           changes: ${{ inputs.changes }}
           sender: ${{ inputs.sender }}

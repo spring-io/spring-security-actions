@@ -1,6 +1,7 @@
 import * as core from "@actions/core";
 import { createOctokit, parseRepository } from "./octokit.js";
 import { execute, isMain } from "./run.js";
+import { rebuildReleases } from "./rebuild.js";
 import { repositoriesOf, syncAll, syncMilestone } from "./sync.js";
 import { addSummary } from "./summary.js";
 
@@ -57,13 +58,20 @@ export async function verdictOf(octokit, { repository, milestone, sender }) {
   return { skip: !override, override };
 }
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const plural = (n, word) =>
+  `${n} ${n === 1 ? word : word.replace(/ch$/, "che") + "s"}`;
 
 /**
  * The summary of a run over all the milestones, as markdown: what each one did (or would do),
  * and the totals.
  */
-export function renderAll({ repository, dryRun, results, totals }) {
+export function renderAll({
+  repository,
+  dryRun,
+  results,
+  totals,
+  rebuilds = [],
+}) {
   const lines = [
     `# Sync of all the milestones of ${repository}${dryRun ? "     DRY RUN: nothing was written or run" : ""}`,
     "",
@@ -77,9 +85,19 @@ export function renderAll({ repository, dryRun, results, totals }) {
       "",
     );
   }
+  if (rebuilds.length > 0) {
+    lines.push("## Rebuilds of the release branches", "");
+    lines.push(
+      ...rebuilds.map(
+        (r) =>
+          `- ${r.branch} (${r.release}): ${r.result}${r.reason ? `, ${r.reason}` : ""}`,
+      ),
+      "",
+    );
+  }
   const verb = dryRun ? "would" : "did";
   lines.push(
-    `**Totals:** ${plural(totals.milestones, "milestone")} looked at. ${plural(totals.descriptions, "description")} ${verb} change, ${plural(totals.dueDates, "due date")}, ${plural(totals.joins, "release")} ${verb} join a train, ${plural(totals.leaves, "release")} ${verb} leave one.`,
+    `**Totals:** ${plural(totals.milestones, "milestone")} looked at. ${plural(totals.descriptions, "description")} ${verb} change, ${plural(totals.dueDates, "due date")}, ${plural(totals.leaves, "release")} ${verb} leave a train${rebuilds.length > 0 ? `, ${plural(rebuilds.filter((r) => ["rebuilt", "would rebuild"].includes(r.result)).length, "branch")} ${dryRun ? "would be" : "were"} rebuilt` : ""}.`,
     "",
   );
   return lines.join("\n");
@@ -99,9 +117,35 @@ async function mainAll(octokit, repository) {
     },
     { octokit, log: (line) => core.info(line) },
   );
+  let rebuilds = [];
+  if (core.getInput("rebuild") === "true") {
+    ({ results: rebuilds } = await rebuildReleases(
+      {
+        repositories: repositoriesOf(repository),
+        project: core.getInput("project") || oss.split("/")[1],
+        trainRepository:
+          core.getInput("release-train-repository") ||
+          "spring-io/release-train",
+        dryRun,
+      },
+      { octokit, log: (line) => core.info(line) },
+    ));
+  }
   core.setOutput("skipped", "false");
-  core.setOutput("changed", String(results.some((r) => r.events.length > 0)));
-  addSummary(renderAll({ repository, dryRun, results, totals }));
+  core.setOutput(
+    "changed",
+    String(
+      results.some((r) => r.events.length > 0) ||
+        rebuilds.some((r) => r.result === "rebuilt"),
+    ),
+  );
+  addSummary(renderAll({ repository, dryRun, results, totals, rebuilds }));
+  const failed = rebuilds.filter((r) => r.result === "failed");
+  if (failed.length > 0) {
+    throw new Error(
+      `The release workflow failed on ${failed.length} ${failed.length === 1 ? "branch" : "branches"}: ${failed.map((r) => `${r.branch} (${r.reason})`).join("; ")}`,
+    );
+  }
 }
 
 export async function main() {

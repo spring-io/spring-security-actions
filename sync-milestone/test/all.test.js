@@ -53,7 +53,15 @@ function project({ joined = true } = {}) {
       "release/5.8.30",
       "embargoed/lts/5.8.x",
     ],
+    versions: {
+      "embargoed/frozen/7.0.x": "7.0.9-SNAPSHOT",
+      "embargoed/active/7.0.x": "7.0.9-SNAPSHOT",
+      "embargoed/frozen/7.1.x": "7.1.3-SNAPSHOT",
+      "embargoed/active/7.1.x": "7.1.3-SNAPSHOT",
+      "embargoed/lts/5.8.x": "5.8.30-SNAPSHOT",
+    },
     trains: {
+      "2026.10.22": trainYaml({ joined: ["7.0.9", "7.0.9.1"] }),
       "2026.11.19": trainYaml({
         availability: "2026-12-17",
         joined: joined
@@ -66,35 +74,53 @@ function project({ joined = true } = {}) {
 }
 
 describe("a dry run of one milestone", () => {
-  it("writes nothing and runs nothing, and says what it would do", async () => {
+  it("writes nothing and starts nothing, and says what it would do", async () => {
     const { github, oss } = project({ joined: false });
     const { actions, events } = await syncMilestone(
-      { repository: OSS, milestone: "7.0.9", dryRun: true, ...common },
+      {
+        repository: OSS,
+        milestone: "7.0.9",
+        changes: { due_on: { from: "2026-10-22T00:00:00Z" } },
+        dryRun: true,
+        ...common,
+      },
       { octokit: github },
     );
     expect(github.updates).toEqual([]);
     expect(github.dispatches).toEqual([]);
     expect(oss["7.0.9"].description).toBe("");
     expect(actions.join("\n")).toMatch(/would change .*7\.0\.9/);
-    expect(actions.join("\n")).toMatch(
-      /7\.0\.9 would join the release train 2026\.11\.19/,
-    );
-    expect(events.filter((e) => e.type === "join")).toHaveLength(2);
+    expect(actions.join("\n")).toMatch(/would be rebuilt/);
+    expect(events.filter((e) => e.type === "rebuild")).toHaveLength(2);
   });
 
   it("does what it said when it is not a dry run", async () => {
-    const { github } = project({ joined: false });
+    const options = {
+      repository: OSS,
+      milestone: "7.0.9",
+      changes: { due_on: { from: "2026-10-22T00:00:00Z" } },
+      ...common,
+    };
     const dry = await syncMilestone(
-      { repository: OSS, milestone: "7.0.9", dryRun: true, ...common },
+      { ...options, dryRun: true },
       { octokit: project({ joined: false }).github },
     );
-    const real = await syncMilestone(
-      { repository: OSS, milestone: "7.0.9", ...common },
-      { octokit: github },
+    const { github } = project({ joined: false });
+    const real = await syncMilestone(options, {
+      octokit: github,
+      sleep: async () => {},
+      intervalMs: 0,
+    });
+    expect(real.events.map((e) => e.type)).toEqual(
+      dry.events.map((e) => e.type),
     );
-    expect(real.events).toEqual(dry.events);
-    expect(github.dispatches).toHaveLength(2);
-    expect(github.updates.length).toBeGreaterThan(0);
+    // it leaves the train of the old date, and builds the branches again to join the new one
+    expect(github.dispatches.map((d) => d.ref)).toEqual([
+      "release/7.0.9",
+      "release/7.0.9.1",
+      "embargoed/frozen/7.0.x",
+      "embargoed/active/7.0.x",
+    ]);
   });
 });
 
@@ -115,8 +141,8 @@ describe("syncAll", () => {
       milestones: 3,
       descriptions: 6,
       dueDates: 1,
-      joins: 0,
       leaves: 0,
+      rebuilds: 0,
     });
   });
 
@@ -192,28 +218,43 @@ describe("syncAll", () => {
       milestones: 3,
       descriptions: 0,
       dueDates: 0,
-      joins: 0,
       leaves: 0,
+      rebuilds: 0,
     });
   });
 
-  it("joins a release that has not joined, and counts it", async () => {
+  it("leaves the train that a description names, when it is not the one of the due date, and counts it", async () => {
+    const { github, oss } = project();
+    oss["7.0.9"].description = "Release Train: 2026.10.22";
+    const { totals } = await syncAll(
+      { repository: OSS, ...common },
+      { octokit: github },
+    );
+    expect(totals.leaves).toBe(2);
+    expect(github.dispatches.map((d) => d.workflow)).toEqual([
+      "release-train-leave.yml",
+      "release-train-leave.yml",
+    ]);
+  });
+
+  it("does not start a rebuild: the nightly run does that for all the branches", async () => {
     const { github } = project({ joined: false });
     const { totals } = await syncAll(
       { repository: OSS, ...common },
       { octokit: github },
     );
-    expect(totals.joins).toBe(5);
-    expect(github.dispatches).toHaveLength(5);
+    expect(totals.rebuilds).toBe(0);
+    expect(github.dispatches).toEqual([]);
   });
 
-  it("does not run the workflows with dispatch false", async () => {
-    const { github } = project({ joined: false });
+  it("starts nothing with dispatch false", async () => {
+    const { github, oss } = project();
+    oss["7.0.9"].description = "Release Train: 2026.10.22";
     const { totals } = await syncAll(
       { repository: OSS, dispatch: false, ...common },
       { octokit: github },
     );
-    expect(totals.joins).toBe(0);
+    expect(totals.leaves).toBe(0);
     expect(github.dispatches).toEqual([]);
   });
 });
@@ -238,7 +279,7 @@ describe("renderAll", () => {
     expect(markdown).toContain("- would change");
     expect(markdown).toContain("- nothing to change");
     expect(markdown).toContain(
-      "**Totals:** 3 milestones looked at. 6 descriptions would change, 1 due date, 0 releases would join a train, 0 releases would leave one.",
+      "**Totals:** 3 milestones looked at. 6 descriptions would change, 1 due date, 0 releases would leave a train.",
     );
   });
 
@@ -251,12 +292,26 @@ describe("renderAll", () => {
         milestones: 0,
         descriptions: 1,
         dueDates: 0,
-        joins: 1,
-        leaves: 0,
+        leaves: 1,
+        rebuilds: 0,
       },
+      rebuilds: [
+        {
+          branch: "embargoed/frozen/7.0.x",
+          release: "7.0.10",
+          result: "rebuilt",
+          reason: "https://github.com/x/y/actions/runs/1",
+        },
+      ],
     });
     expect(markdown).not.toContain("DRY RUN");
     expect(markdown).toContain("1 description did change");
-    expect(markdown).toContain("1 release did join a train");
+    expect(markdown).toContain(
+      "1 release did leave a train, 1 branch were rebuilt.",
+    );
+    expect(markdown).toContain("## Rebuilds of the release branches");
+    expect(markdown).toContain(
+      "- embargoed/frozen/7.0.x (7.0.10): rebuilt, https://github.com/x/y/actions/runs/1",
+    );
   });
 });

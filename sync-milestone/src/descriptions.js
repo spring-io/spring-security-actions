@@ -11,12 +11,6 @@ const RELEASE_TRAIN = /^\d{4}\.\d{2}\.\d{2}$/;
 /** The line that says the release is in a train. */
 export const trainLine = (train) => `Release Train: ${train}`;
 
-export const missingTrain = (train) =>
-  `ERROR: The Release Train ${train} doesn't exist`;
-
-export const cannotJoin = (train, branch) =>
-  `ERROR: Cannot join the Release Train ${train}: ${branch} does not exist`;
-
 export const cannotLeave = (train) =>
   `ERROR: Cannot leave the Release Train ${train}: it is ready`;
 

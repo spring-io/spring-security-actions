@@ -17,9 +17,9 @@ A freeze from `7.0.9-SNAPSHOT` to `7.0.10-SNAPSHOT` closes `7.0.9` (OSS), `7.0.9
 
 ## The due date is the release train
 
-The **due date of the OSS milestone** of a release is the date of its release train: `2026-11-19` is the train `2026.11.19`, the branch of that name in the release train repository. The release (`release/7.0.9`) joins it, and the hotfix (`release/7.0.9.1`) joins it too. The milestone of the hotfix is due on the **commercial general availability** of the train (`schedule.publication.commercial-general-availability`), and the commercial milestone `7.0.9` is due when the OSS one is.
+The **due date of the OSS milestone** of a release is the date of its release train: `2026-11-19` is the train `2026.11.19`, the branch of that name in the release train repository. The release (`release/7.0.9`) joins it, and the hotfix (`release/7.0.9.1`) joins it too, **through the release workflow**, once it has built the branch against the train. A release that is not built is not joined: a hotfix has no branch when the active branch has nothing that the frozen one lacks, and that is not an error. The milestone of the hotfix is due on the **commercial general availability** of the train (`schedule.publication.commercial-general-availability`), and the commercial milestone `7.0.9` is due when the OSS one is.
 
-The description of the milestones says which train they are in, so that it can be seen, and left when the due date changes:
+The description of the milestones says which train they are in, once the train says that the release has joined, so that it can be seen, and left when the due date changes. A release that is not in a train has no line:
 
 | The milestone | Its description |
 |---|---|
@@ -36,26 +36,27 @@ A long-term support version has no OSS milestone, so its line is what names its 
 
 | The edit | What it does |
 |---|---|
-| a due date is set on the OSS `7.0.9` | the release and the hotfix **join** the train of the date (the workflow `Release Train - Join` of the release branch); the commercial `7.0.9` gets the due date; the hotfix gets the commercial general availability, and the line |
-| the due date of the OSS `7.0.9` changes | they **leave** the train of the previous date, and join the new one |
-| the due date is cleared | they leave the train, the lines are taken out, and the due dates of the commercial milestones are cleared |
+| a due date is set on the OSS `7.0.9` | the commercial `7.0.9` gets the due date, the hotfix gets the commercial general availability. If the train exists and the release has not joined it, the release workflow is **started** on `embargoed/frozen/7.0.x`, and then on `embargoed/active/7.0.x` (the hotfix merges the new release), which builds the branches against the train and joins it, and writes the line |
+| the due date of the OSS `7.0.9` changes | the release and the hotfix **leave** the train of the previous date (the workflow `Release Train - Leave`), and the same rebuild joins the new one |
+| the due date is cleared | they leave the train, the lines are taken out, and the due dates of the commercial milestones are cleared. Nothing is rebuilt |
 | the commercial milestone of an OSS version, or its hotfix, is edited | it is put back as the OSS milestone says |
-| the line of a long-term support milestone changes | the release leaves the train that the old line named, and joins the new one, and the due date is set |
+| the line of a long-term support milestone changes | the release leaves the train that the old line named, the due date is set, and the release workflow is started on `embargoed/lts/5.8.x`, which joins the new one |
 
-It never leaves a train that the release did not join, and it writes nothing that is right already.
+It never leaves a train that the release did not join, it never joins a train itself, and it writes nothing that is right already.
 
 ### When it cannot
 
-The description says why, and the milestone is not left looking right:
+Two errors are written into a description. Two things are **not** errors:
+
+- **A due date whose train does not exist (yet)** is kept. The milestones have no train line, the release leaves the train it was in, and nothing is rebuilt until the train exists. The nightly run, or a run by hand with `all`, finds the train later.
+- **A release branch that does not exist.** Not building a branch means not joining it, on purpose: a hotfix with nothing to build has none. Nothing is written, and the release workflow ends with "Nothing to build", which is a success.
 
 | The description | What happened | What to do |
 |---|---|---|
-| `ERROR: The Release Train 2026.12.31 doesn't exist` | There is no branch `2026.12.31` in the release train repository. The **due date was cleared** (or, for long-term support, the line was replaced), and the release left the train that it was in. | Set the due date again once the train has been created, or type another line. |
-| `ERROR: Cannot join the Release Train 2026.11.19: release/7.0.9.1 does not exist` | The release branch is built when the embargoed branch is pushed, and it was not yet (or the active branch has nothing that the frozen one lacks, so there is no hotfix). | Push the embargoed branch. The release workflow joins the release, and writes the line. |
 | `ERROR: Cannot leave the Release Train 2026.11.19: it is ready` | The release is ready in the train that the due date moved it out of, and a ready train cannot be left. Nothing else was changed. | Sort it out in the release train, then edit the milestone again. |
 | `ERROR: The Release Train 2026.11.19 has no commercial-general-availability` | The hotfix has no date to be due on. | Add `schedule.publication.commercial-general-availability` to the train. |
 
-The release workflow ([release-branches](release-branches.md)) runs the same action after the release joins (`dispatch: false`): it writes the `Release Train:` line, and replaces an `ERROR: Cannot join` line of an earlier run.
+The release workflow ([release-branches](release-branches.md)) runs the same action after the release joins (`dispatch: false`, which assumes the release joined): it writes the `Release Train:` line.
 
 ## Setup
 
@@ -69,6 +70,9 @@ The release workflow ([release-branches](release-branches.md)) runs the same act
 ```yaml
 name: sync-milestone
 on:
+  # every night: sync all the milestones, and build the release branches again
+  schedule:
+    - cron: "0 6 * * *"
   milestone:
     types: [edited]
   workflow_dispatch:
@@ -81,6 +85,10 @@ on:
         required: false
       all:
         description: "Sync every open milestone of the project that has a release"
+        type: boolean
+        default: false
+      rebuild:
+        description: "With all, also build the release branches again (what the nightly run does)"
         type: boolean
         default: false
       dry-run:
@@ -101,7 +109,8 @@ jobs:
     with:
       repository: ${{ inputs.repository || github.repository }}
       milestone: ${{ inputs.milestone || github.event.milestone.title }}
-      all: ${{ github.event_name == 'workflow_dispatch' && inputs.all }}
+      all: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.all) }}
+      rebuild: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.rebuild) }}
       dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
       changes: ${{ inputs.changes || toJSON(github.event.changes) }}
       sender: ${{ inputs.sender || (github.event_name == 'milestone' && github.event.sender.login) || '' }}
@@ -123,11 +132,22 @@ Run the caller of the commercial repository from the Actions tab (**Run workflow
 | do it | the same with `dry-run` off |
 | one milestone, and what follows it | `milestone` `7.0.9` (and `repository` for an OSS milestone, `spring-projects/spring-security`), `all` off |
 
-A dry run writes nothing and runs nothing: the summary lists, for each milestone, what it would change (`would change spring-projects/spring-security 7.0.9: description is now: Release Train: 2026.11.19`) and which releases would join or leave a train, and ends with the totals. A real run does the same, and the totals say what was done.
+A dry run writes nothing and runs nothing: the summary lists, for each milestone, what it would change (`would change spring-projects/spring-security 7.0.9: description is now: Release Train: 2026.11.19`), which releases would leave a train, and, with `rebuild`, which branches it would build again, and ends with the totals. A real run does the same, and the totals say what was done.
 
-`all` goes through the open milestones that have a release, in the OSS repository (each with its commercial milestone and its hotfix), and the open commercial milestones of long-term support (those with no OSS milestone, that have a `Release Train:` line or a long-term support branch). Closed milestones, the milestones that track the next release (`7.0.10`), titles that are not the version of a release (`7.0.x`), and an OSS milestone that has no due date and no `Release Train:` line (it has never been in a train, and its commercial milestone may be one that was released long ago) are left out. It knows no previous due date, so a release leaves the train that its description names. A release that is in its train already is not joined again, so it is safe to run it twice.
+`all` goes through the open milestones that have a release, in the OSS repository (each with its commercial milestone and its hotfix), and the open commercial milestones of long-term support (those with no OSS milestone, that have a `Release Train:` line or a long-term support branch). Closed milestones, the milestones that track the next release (`7.0.10`), titles that are not the version of a release (`7.0.x`), and an OSS milestone that has no due date and no `Release Train:` line (it has never been in a train, and its commercial milestone may be one that was released long ago) are left out. It knows no previous due date, so a release leaves the train that its description names. It writes the line of a release that the train says has joined, and starts nothing else (with `rebuild` off), so it is safe to run twice.
 
 It is how to bring the milestones of a project to what the handler would have made, after this was set up: run the dry run, read the summary, and run it again with `dry-run` off.
+
+### The nightly run
+
+The schedule of the caller runs `all` and `rebuild` every night (06:00 UTC), on the default branch of the commercial repository. First it syncs all the milestones, which writes the train lines that the train now supports. Then it starts the release workflow on the embargoed branches, so that each release branch and snapshot branch is built again with the dependency updates that the train has now, a fresh build runs the tests, and the snapshot is published:
+
+- `embargoed/frozen/<generation>` and `embargoed/lts/<generation>` first, all at once, and `embargoed/active/<generation>` after them. The hotfix merges the release, so it needs the new one.
+- It rebuilds a release **until it is ready** in its train, and skips it after that. It also skips every branch while the code freeze runs, because the freeze marks releases ready and bumps the versions. A release with no train is built too, without dependency updates.
+- A branch that has nothing to build (a hotfix, right after a freeze) is not an error: the run ends with "Nothing to build". Only a run that fails makes the nightly run fail, and it names the branch.
+- Cost: about 20 runs of the release workflow a night for spring-security and spring-session together.
+
+The same also starts when a due date, or the line of a long-term support milestone, changes: the handler leaves the old train, and builds the frozen branch, and then the active one, once.
 
 ### The caller of the OSS repository
 
@@ -165,7 +185,7 @@ jobs:
 | What for | On | Fine-grained token | Classic token |
 |---|---|---|---|
 | read and write the milestones | both repositories | **Issues: Read and write** | `repo` |
-| run `release-train-join.yml` and `release-train-leave.yml` on the release branches, and the sync in the commercial repository from the OSS one | the commercial repository | **Actions: Read and write** | `repo` |
+| run `release-train-leave.yml` on the release branches, the release workflow on the embargoed branches (and read its runs and the code freeze's), and the sync in the commercial repository from the OSS one | the commercial repository | **Actions: Read and write** | `repo` |
 | read the release train | the release train repository | **Contents: Read-only** | `repo` |
 
 ## Setting a date as the owner of the token

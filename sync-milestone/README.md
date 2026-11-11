@@ -6,6 +6,8 @@ Keeps the milestones of a release in step with its release train. It runs when a
 
 A release of OSS (`7.0.9`) has its milestone in the OSS repository, and its **due date is the date of its release train**: `2026-11-19` is the train `2026.11.19`. The release (`release/7.0.9`) joins that train, and so does its hotfix (`release/7.0.9.1`), whose milestone is in the commercial repository and is due on the **commercial general availability** of the train. The commercial milestone of the release itself (`7.0.9`) is due when the OSS one is, and has the link to it.
 
+**It never joins a train.** The release workflow joins, once it has built the release branch against the train (the dependency updates), and a release that is not built is not joined: a hotfix with nothing to build has no branch, and that is not an error. What this action does when a date or a line changes is **leave** the train that the release was in, and start the release workflow on the embargoed branches (the frozen branch, and then the active one), which builds the branches again and joins the new train. The line `Release Train: <train>` is written when the train says that the release has joined.
+
 | The milestone | The description | The due date |
 |---|---|---|
 | OSS `7.0.9` | `Release Train: 2026.11.19` as its first line, and any text after it | set by a person |
@@ -15,11 +17,12 @@ A release of OSS (`7.0.9`) has its milestone in the OSS repository, and its **du
 
 An edit of any of the first three, in either repository, makes all of them follow the OSS milestone: what was typed in the commercial milestone of an OSS version or in its hotfix is replaced. A long-term support version has no OSS milestone, and its line is the source. The commercial repository has a long-term support branch for it (`embargoed/lts/5.8.x`), which is how it is told from the milestone of a release that is not one.
 
-- **The previous train.** A release that is in another train leaves it before it joins the new one. The previous train is the one of the previous due date (`changes.due_on.from` of the event), and the one that a description named. A train that the release did not join is not left.
-- **A train that does not exist** (no branch of that date in the release train repository), or one with no `schedule.publication.commercial-general-availability` for a hotfix: the due date is cleared, the release leaves the train that it was in, and the description is `ERROR: The Release Train 2026.12.31 doesn't exist`.
-- **A release branch that does not exist** cannot join: the description is `ERROR: Cannot join the Release Train 2026.11.19: release/7.0.9.1 does not exist`. The release workflow, which builds the branch, writes the line when it joins.
+- **The previous train.** A release that is in another train leaves it before the rebuild joins the new one. The previous train is the one of the previous due date (`changes.due_on.from` of the event), and the one that a description named. A train that the release did not join is not left.
+- **A due date with no train** (no branch of that date in the release train repository yet) is kept. The milestones have no train line, the release leaves the train that it was in, and nothing is started. The hotfix keeps its due date, as it comes from the train. Once the train exists, the nightly run, or a run by hand with `all`, finds it.
+- **A train with no `schedule.publication.commercial-general-availability`** makes the hotfix say `ERROR: The Release Train 2026.11.19 has no commercial-general-availability`.
 - **A train that is ready** cannot be left: the description is `ERROR: Cannot leave the Release Train 2026.11.19: it is ready`, and nothing else changes.
-- **The due date is cleared:** the release leaves the train, and the line is taken out.
+- **The due date is cleared:** the release leaves the train, and the line is taken out. Nothing is rebuilt.
+- **The release workflow fails:** the run fails, and says on which branch. A branch that has nothing to build is not a failure.
 
 Nothing is written to a milestone that is right already, so a run that is done again makes no edit. A milestone that is not the version of a release (`7.0.x`, `General Backlog`), a hotfix whose OSS milestone does not exist, and an edit of the title are left alone.
 
@@ -53,7 +56,8 @@ So a field that was empty is **not** in `changes`, and `{}` is treated as no cha
 | `sender` | no | `github.event.sender.login`, for an edit. Empty for a run by hand. |
 | `project` | no | The project id in the train, the name of the OSS repository by default. |
 | `release-train-repository` | no | `spring-io/release-train` by default. |
-| `dispatch` | no, `true` | `false` does not run the workflows that join and leave: it is for after the release joined, to write the lines. The release workflow does it. |
+| `rebuild` | no, `false` | With `all`, also starts the release workflow on the embargoed branches (the frozen and the long-term support ones first, the active ones after), so each release is built again with the dependency updates of its train, and joins it. A release that is ready in its train, and the time of a code freeze, are skipped. A release with no train is built too, so that it is tested and its snapshot is published. |
+| `dispatch` | no, `true` | `false` runs nothing (no leave, no rebuild) and takes the releases as joined: it is for after the release joined, to write the lines. The release workflow does it. |
 | `token` | yes | See below. |
 
 ## Outputs
@@ -62,7 +66,7 @@ So a field that was empty is **not** in `changes`, and `{}` is treated as no cha
 
 ## Secrets and permissions
 
-The token needs, on the **commercial** repository, **Issues: Read and write** (the milestones) and **Actions: Read and write** (to run `release-train-join.yml` and `release-train-leave.yml` on the release branches, as `join-train` does), on the **OSS** repository **Issues: Read and write**, and **Contents: Read-only** on the release train repository. A classic token with `repo` does all of it.
+The token needs, on the **commercial** repository, **Issues: Read and write** (the milestones) and **Actions: Read and write** (to run `release-train-leave.yml` on the release branches, and the release workflow `release-branches.yml` on the embargoed branches, and to read its runs and those of the code freeze), on the **OSS** repository **Issues: Read and write**, and **Contents: Read-only** on the release train repository. A classic token with `repo` does all of it.
 
 ## Trying it
 

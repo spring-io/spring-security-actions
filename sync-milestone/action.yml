@@ -25,6 +25,10 @@ inputs:
     description: "`true` syncs every open milestone of the project that has a release (the OSS ones, with their commercial milestone and hotfix, and the commercial ones of long-term support), for a run by hand. The milestone, changes and sender are not used."
     required: false
     default: "false"
+  rebuild:
+    description: "`true`, with `all`, then starts the release workflow on the embargoed branches (the frozen and long-term support ones first, the active ones after them) so that each release branch and snapshot branch is built again, with the dependency updates of the train, and joins it. A release that is ready, and the time of a code freeze, are skipped."
+    required: false
+    default: "false"
   dry-run:
     description: "`true` writes nothing and runs nothing: the summary says what would be done"
     required: false
