@@ -37,12 +37,11 @@ name: release-branches
 #
 # The milestone of the release (in the OSS repository, or for a hotfix in the commercial one)
 # is looked for in the plan job, before anything is built. A version whose milestone does not
-# exist is created, with a title and nothing else (no due date, no Release Train line). A hotfix
-# goes on once it has a train (the due date of its OSS milestone); a frozen or long-term support
-# version has none, so the run ends with the notice Milestone created and builds nothing: the
-# summary says what to set for the kind of the branch. A milestone that exists, but is not in a
-# release train (no due date, or for a long-term support version no Release Train line), fails
-# the run, and its summary says what to change.
+# exist is created, with a title and nothing else (no due date, no Release Train line). A release
+# with no due date (or, for long-term support, no Release Train line), and a hotfix whose OSS
+# milestone has no due date, is built all the same, without a release train: no dependency
+# updates, and nothing joins, with the notice No release train. Built again once it has a train (the
+# nightly run does it), it gets the updates, and joins.
 #
 # What the release train asks for is read from the release train repository, from the
 # branch of the date that the milestone of the release is due (for a hotfix, the milestone of the
@@ -50,7 +49,7 @@ name: release-branches
 # the train that builds it). The milestone of a long-term support version in the commercial
 # repository names its train with a line of its description (Release Train: 2026.10.22): it has
 # no other way, as it is due on the commercial availability of the train, which is not the date
-# of the train. Only a commercial version names its train. If the train does not exist, the
+# of the train. Only a commercial version names its train. If the train does not exist (yet), the
 # branches are built without the dependency updates. A release that is ready in the
 # train is not changed: the run fails, and says what to do.
 #
@@ -176,10 +175,10 @@ jobs:
           fail-if-missing: "false"
           kind: ${{ steps.plan.outputs.kind }}
       # If the milestone does not exist, it is created, with a title and nothing else: no due date
-      # and no release train. That of a hotfix is not in a train until the OSS milestone is, and
-      # its due date is set from it, so it is created whatever the OSS milestone has. Any other has
-      # nothing to build until it is in a train: the run ends with a notice, the summary says what to
-      # set for the kind, and the build job is skipped.
+      # and no release train. That is no reason not to build: a release that is not in a train is
+      # built all the same, without the dependency updates of a train and without joining one, with
+      # the notice No release train. That of a hotfix has its due date set from the OSS milestone,
+      # once there is a train. Built again once it has one, it gets the updates, and joins.
       - name: Work out the release version
         id: release
         if: steps.plan.outputs.release == 'true' && (steps.plan.outputs.kind != 'active' || steps.compare.outputs.different == 'true') && steps.train-milestone.outputs.no-release != 'true'
@@ -191,11 +190,11 @@ jobs:
           create-missing: "true"
           fail-if-missing: "false"
           kind: ${{ steps.plan.outputs.kind }}
-          # The due date of a hotfix is corrected to the commercial availability of its train
-          require-due-date: ${{ steps.plan.outputs.kind != 'active' }}
-          # The milestone of a long-term support version has no train that its due date can name:
-          # its description does (Release Train: 2026.10.22), and its due date is set from that train
-          require-release-train: ${{ steps.plan.outputs.kind == 'lts' }}
+          # Neither a due date (the date of the train, or for a hotfix its commercial availability) nor,
+          # for long-term support, the line of the description (Release Train: 2026.10.22) is needed to
+          # build: without them it is built without a train
+          require-due-date: "false"
+          require-release-train: "false"
       # Every OSS version is a milestone of the commercial repository too, due when the OSS one is,
       # and following it if that changes: the issues of the fixes that only customers get (for a CVE)
       # need the milestone of the version. It is made once the OSS milestone has a due date, and
@@ -209,22 +208,10 @@ jobs:
           due-date: ${{ steps.release.outputs.due-date }}
           description: "${{ format('OSS milestone: {0}', steps.release.outputs.milestone-url) }}"
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
-      # The milestone of the hotfix is there now. Without a due date on the OSS milestone that it
-      # fixes, the hotfix has no release train, and the run stops: the same action asks for the
-      # due date, and fails with a summary that says to set it.
-      - name: Stop if the OSS milestone of the hotfix has no due date
-        if: steps.train-milestone.outputs.found == 'true' && steps.train-milestone.outputs.due-date == ''
-        uses: spring-io/spring-security-actions/compute-release-version@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
-        with:
-          snapshot-version: ${{ format('{0}-SNAPSHOT', steps.plan.outputs.hotfix-of-version) }}
-          milestone-repository: ${{ steps.repositories.outputs.oss-repository }}
-          milestone-token: ${{ secrets.GITHUB_TOKEN }}
-          release-only: "true"
-          kind: ${{ steps.plan.outputs.kind }}
       # A frozen or active embargoed branch is for a generation that is still OSS when the release
       # is made public (the date of its train). Once it is commercial, it has one embargoed/lts branch.
       - name: Check that the generation is still supported as OSS
-        if: steps.plan.outputs.kind != 'lts' && steps.release.outputs.found == 'true' && steps.train-milestone.outputs.found != 'false'
+        if: steps.plan.outputs.kind != 'lts' && steps.release.outputs.found == 'true' && steps.train-milestone.outputs.found != 'false' && (steps.train-milestone.outputs.due-date || steps.release.outputs.due-date) != ''
         uses: spring-io/spring-security-actions/check-oss-support@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           project: ${{ steps.repositories.outputs.project }}
@@ -263,6 +250,7 @@ jobs:
       # created, that is said in a notice, and the branches are built without the dependencies.
       - name: Read the release train
         id: train
+        if: needs.plan.outputs.train-branch != '' || needs.plan.outputs.train-date != ''
         uses: spring-io/spring-security-actions/load-train@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           release-train-repository: ${{ inputs.release-train-repository || 'spring-io/release-train' }}
@@ -426,6 +414,7 @@ jobs:
       # release, the one that was set above for a hotfix. A release that has joined is not joined
       # again, so a run by hand after the due date of a milestone was set joins what was missed.
       - name: Join the release train
+        if: steps.train.outputs.found != ''
         uses: spring-io/spring-security-actions/join-train@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           release-train-repository: ${{ inputs.release-train-repository || 'spring-io/release-train' }}

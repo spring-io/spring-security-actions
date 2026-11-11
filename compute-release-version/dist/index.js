@@ -36804,11 +36804,11 @@ function createdMilestoneSummary({
   return [
     `### ${candidate} is not in a release train yet`,
     "",
-    `The milestone ${link} was created in ${repository}, with ${what}, so nothing was built.`,
+    `The milestone ${link} was created in ${repository}, with ${what}, so its branches are built without a release train: no dependency updates, and nothing joins.`,
     "",
-    "To add it to a release train:",
+    "To add it to a release train, once the train exists:",
     `1. ${steps}`,
-    "2. Run the workflow again.",
+    "2. Run the workflow again on the embargoed branch (the nightly run does it): it builds the branches against the train, and joins it.",
     "",
   ].join("\n");
 }
@@ -36928,20 +36928,10 @@ async function run(
     if (!createMissing || exists) {
       return { result: { found: false, candidate, message } };
     }
+    // the milestone is made, with a title and nothing else, and the run goes on with it: its
+    // branches are built without a release train until it has one (see the notice in main)
     const made = await createMilestone(octokit, milestoneRepository, candidate);
-    if (kind === "active" && isHotfix(candidate)) {
-      return { milestone: made };
-    }
-    return {
-      result: {
-        found: false,
-        created: true,
-        candidate,
-        milestone: made,
-        notice: "Milestone created",
-        message: `Created the milestone ${candidate} in ${milestoneRepository}, which is not in a release train yet, so nothing is built`,
-      },
-    };
+    return { milestone: made };
   };
   if (candidate.endsWith(".0")) {
     const pattern = new RegExp(`^${escapeRegExp(candidate)}(-(M|RC)\\d+)?$`);
@@ -37120,6 +37110,14 @@ async function main() {
     );
   }
   const { releaseVersion, dueDate, releaseTrain, milestoneUrl } = result;
+  // a release with no train is built all the same, without the dependency updates of a train
+  const noTrain = inputs.kind === "lts" ? !releaseTrain : !dueDate;
+  if (noTrain) {
+    notice(
+      `The milestone ${releaseVersion} of ${inputs.milestoneRepository} has no ${inputs.kind === "lts" ? "line Release Train:" : "due date"}, so its branches are built without a release train: no dependency updates, and nothing joins. Set it, and run the workflow again once the train exists.`,
+      { title: "No release train" },
+    );
+  }
   info(
     `${inputs.snapshotVersion} is released as ${releaseVersion}, due ${dueDate || "on no date"}`,
   );

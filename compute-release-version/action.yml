@@ -28,7 +28,7 @@ inputs:
     required: false
     default: "frozen"
   create-missing:
-    description: "Whether to create the milestone if it does not exist, with a title and nothing else (no due date, no release train). A hotfix (kind active) goes on with it: it needs neither. Any other ends with the notice Milestone created, as it is not in a release train yet, and the summary says what to set. The token must be allowed to create milestones in the repository"
+    description: "Whether to create the milestone if it does not exist, with a title and nothing else (no due date, no release train). A hotfix (kind active) goes on with it: it needs neither. It is made and used for every kind: its branches are built without a release train, with the notice No release train, until it has one. The token must be allowed to create milestones in the repository"
     required: false
     default: "false"
   fail-if-missing:
