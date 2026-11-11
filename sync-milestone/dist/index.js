@@ -37207,7 +37207,8 @@ var __webpack_exports__ = {};
 __nccwpck_require__.d(__webpack_exports__, {
   ph: () => (/* binding */ isOwnEdit),
   iW: () => (/* binding */ main),
-  pS: () => (/* binding */ parseChanges)
+  pS: () => (/* binding */ parseChanges),
+  Vj: () => (/* binding */ verdictOf)
 });
 
 ;// CONCATENATED MODULE: external "os"
@@ -45363,6 +45364,10 @@ function repositoriesOf(repository) {
  * Nothing is written to a milestone that is right already, so that a run that is done again
  * makes no edit (and so no event of GitHub).
  *
+ * `override` is for an edit that the user of the token made on purpose: its description
+ * starts with !, which is taken out first (that edit is the handler's own, and is ignored,
+ * so it does not run it again).
+ *
  * `changes` is the field `changes` of the event of GitHub, with what the edit changed
  * (due_on, description or title, each with `from`). `dispatch` false does not run the
  * workflows to join and leave: it is for after the join was made, to write the lines.
@@ -45375,6 +45380,7 @@ async function syncMilestone(
     project,
     trainRepository,
     dispatch = true,
+    override = false,
   },
   { octokit, log = () => {} },
 ) {
@@ -45708,6 +45714,17 @@ async function syncMilestone(
     note(`${title} is not the version of a release: nothing to do`);
     return { actions };
   }
+  if (override) {
+    const edited = await find(repository, title);
+    if (edited?.description?.startsWith("!")) {
+      await write(repository, edited, {
+        description: edited.description.slice(1),
+      });
+      note(
+        `${repository} ${title}: the ! at the start of the description is taken out`,
+      );
+    }
+  }
   if (repository === oss) {
     await syncRelease(title, { fromOss: true });
   } else if (HOTFIX.test(title)) {
@@ -45816,13 +45833,37 @@ async function isOwnEdit(octokit, sender) {
   }
 }
 
+/**
+ * What to do with an edit: it is the handler's own if the user of the token made it, and is
+ * left alone, unless that user means it: a description that starts with ! says so
+ * (`override`), and the handler takes the ! out before it does anything.
+ */
+async function verdictOf(octokit, { repository, milestone, sender }) {
+  if (!(await isOwnEdit(octokit, sender))) {
+    return { skip: false, override: false };
+  }
+  const { owner, repo } = parseRepository(repository);
+  const milestones = await octokit.paginate(
+    octokit.rest.issues.listMilestones,
+    { owner, repo, state: "all", per_page: 100 },
+  );
+  const found = milestones.find((m) => m.title === milestone);
+  const override = Boolean(found?.description?.startsWith("!"));
+  return { skip: !override, override };
+}
+
 async function main() {
   const repository = getInput("repository", { required: true });
   const title = getInput("milestone", { required: true });
   const octokit = createOctokit({ token: getInput("token") });
-  if (await isOwnEdit(octokit, getInput("sender"))) {
+  const verdict = await verdictOf(octokit, {
+    repository,
+    milestone: title,
+    sender: getInput("sender"),
+  });
+  if (verdict.skip) {
     info(
-      `${getInput("sender")} made the edit of ${title}, and is the user of the token: it is the edit of this handler, so it is left alone`,
+      `${getInput("sender")} made the edit of ${title}, and is the user of the token: it is the edit of this handler, so it is left alone (a description that starts with ! asks for it)`,
     );
     setOutput("skipped", "true");
     addSummary(
@@ -45840,6 +45881,7 @@ async function main() {
       trainRepository:
         getInput("release-train-repository") || "spring-io/release-train",
       dispatch: getInput("dispatch") !== "false",
+      override: verdict.override,
     },
     { octokit, log: (line) => info(line) },
   );
@@ -45861,4 +45903,5 @@ if (isMain(import.meta.url)) {
 var __webpack_exports__isOwnEdit = __webpack_exports__.ph;
 var __webpack_exports__main = __webpack_exports__.iW;
 var __webpack_exports__parseChanges = __webpack_exports__.pS;
-export { __webpack_exports__isOwnEdit as isOwnEdit, __webpack_exports__main as main, __webpack_exports__parseChanges as parseChanges };
+var __webpack_exports__verdictOf = __webpack_exports__.Vj;
+export { __webpack_exports__isOwnEdit as isOwnEdit, __webpack_exports__main as main, __webpack_exports__parseChanges as parseChanges, __webpack_exports__verdictOf as verdictOf };

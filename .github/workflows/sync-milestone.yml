@@ -14,8 +14,8 @@ name: sync-milestone
 #   - An edit of the commercial milestone of an OSS version, or of its hotfix, is put right from the
 #     OSS milestone.
 #
-# An edit by the user of the token is the one of this workflow, and is left alone: use a token of a
-# user that no one edits milestones as.
+# An edit by the user of the token is the one of this workflow, and is left alone, unless the description
+# starts with ! (the owner of the token asking for a run: the ! is taken out, and it runs once).
 #
 # This is a reusable workflow, and it runs in the commercial repository, which has the release
 # branches and the token. The commercial repository calls it from a workflow on its default branch
@@ -39,7 +39,7 @@ on:
         required: false
         default: ""
       sender:
-        description: "Who made the edit (github.event.sender.login). An edit by the user of the token is left alone"
+        description: "Who made the edit (github.event.sender.login), empty for a run by hand. An edit by the user of the token is left alone, unless its description starts with !"
         type: string
         required: false
         default: ""

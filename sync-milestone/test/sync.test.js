@@ -317,6 +317,90 @@ describe("the due date of an OSS milestone changes", () => {
   });
 });
 
+describe("a ! at the start of the description of an edit of the user of the token", () => {
+  it("is taken out first, and the edit is done", async () => {
+    const { github, oss, mirror, sync } = world();
+    oss.description = "!Notes of the release";
+    await sync({ changes: { due_on: { from: "" } }, override: true });
+    expect(github.updates[0]).toMatchObject({
+      repository: OSS,
+      description: "Notes of the release",
+    });
+    expect(oss.description).toBe(
+      "Release Train: 2026.11.19\nNotes of the release",
+    );
+    expect(mirror.due_on).toBe("2026-11-19T12:00:00Z");
+    expect(dispatched(github)).toEqual([
+      "join release/7.0.9",
+      "join release/7.0.9.1",
+    ]);
+  });
+
+  it("is taken out of a train line too", async () => {
+    const { github, oss, sync } = world();
+    oss.description = "!Release Train: 2026.11.19\nNotes of the release";
+    await sync({ changes: { due_on: { from: "" } }, override: true });
+    expect(github.updates[0].description).toBe(
+      "Release Train: 2026.11.19\nNotes of the release",
+    );
+  });
+
+  it("is taken out of the milestone that was edited, in the commercial repository", async () => {
+    const { github, fix, sync } = world();
+    fix.description = "!whatever";
+    await sync({ repository: HOST, milestone: "7.0.9.1", override: true });
+    expect(github.updates[0]).toMatchObject({
+      repository: HOST,
+      description: "whatever",
+    });
+    expect(fix.description).toBe("Release Train: 2026.11.19");
+  });
+
+  it("is all there is to it when nothing follows: the description is just !", async () => {
+    const { github, oss, mirror, fix, sync } = world();
+    oss.description = "!";
+    await sync({ changes: { due_on: { from: "" } }, override: true });
+    expect(github.updates[0]).toMatchObject({
+      repository: OSS,
+      description: "",
+    });
+    expect(oss.description).toBe("Release Train: 2026.11.19");
+    expect(mirror.due_on).toBe("2026-11-19T12:00:00Z");
+    expect(fix.description).toBe("Release Train: 2026.11.19");
+    expect(dispatched(github)).toEqual([
+      "join release/7.0.9",
+      "join release/7.0.9.1",
+    ]);
+  });
+
+  it("clears the due date of a milestone whose description is just !", async () => {
+    const { github, oss, sync } = world({
+      ossDue: "2026-12-31",
+      trains: { "2026.11.19": trainYaml({ joined: ["7.0.9", "7.0.9.1"] }) },
+    });
+    oss.description = "!";
+    await sync({
+      changes: { due_on: { from: due("2026-11-19") } },
+      override: true,
+    });
+    expect(oss.due_on).toBeNull();
+    expect(oss.description).toBe(
+      "ERROR: The Release Train 2026.12.31 doesn't exist",
+    );
+    expect(dispatched(github)).toEqual([
+      "leave release/7.0.9",
+      "leave release/7.0.9.1",
+    ]);
+  });
+
+  it("is left where it is without override", async () => {
+    const { oss, sync } = world();
+    oss.description = "!Notes";
+    await sync({ changes: { due_on: { from: "" } } });
+    expect(oss.description).toBe("Release Train: 2026.11.19\n!Notes");
+  });
+});
+
 describe("the other edits", () => {
   it("ignores an edit of the OSS milestone that is not of its due date or description", async () => {
     const { github, sync } = world();

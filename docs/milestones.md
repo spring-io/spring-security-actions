@@ -62,7 +62,7 @@ The release workflow ([release-branches](release-branches.md)) runs the same act
 1. **The reusable workflow** is this repository's `sync-milestone.yml`. It runs in the commercial repository.
 2. **The caller in the commercial repository**, on its **default branch** (`main`): GitHub runs the event `milestone` only from there. It runs for an edit of a commercial milestone, and by hand.
 3. **The caller in the OSS repository**, on its default branch: it runs for an edit of an OSS milestone, and runs the caller of the commercial repository.
-4. **The secret `RELEASE_AUTOMATION_TOKEN`** in both repositories (the one of the other workflows), and the permissions below. It must be the token of a user that **no one edits milestones as**: an edit by that user is the handler's own, and is ignored. A person who is that user runs the workflow by hand.
+4. **The secret `RELEASE_AUTOMATION_TOKEN`** in both repositories (the one of the other workflows), and the permissions below. An edit by the user of the token is the handler's own, and is ignored, so that it does not run itself again. The owner of the token can still ask for a run: see [Setting a date as the owner of the token](#setting-a-date-as-the-owner-of-the-token).
 
 ### The caller of the commercial repository
 
@@ -94,14 +94,14 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       milestone: ${{ inputs.milestone || github.event.milestone.title }}
       changes: ${{ inputs.changes || toJSON(github.event.changes) }}
-      sender: ${{ inputs.sender || github.event.sender.login }}
+      sender: ${{ inputs.sender || (github.event_name == 'milestone' && github.event.sender.login) || '' }}
       release-train-repository: ${{ vars.RELEASE_TRAIN_REPOSITORY }}
       runs-on: ${{ vars.UBUNTU_RUNS_ON }}
     secrets:
       RELEASE_AUTOMATION_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
 ```
 
-A run by hand with only `milestone` (and `repository` for an OSS milestone) syncs the milestones as they are: the train that the release has to leave is found from the description, as the previous due date is not known.
+A run by hand with only `milestone` (and `repository` for an OSS milestone) syncs the milestones as they are: the train that the release has to leave is found from the description, as the previous due date is not known. It has no sender, so it always runs, whoever starts it.
 
 ### The caller of the OSS repository
 
@@ -142,6 +142,18 @@ jobs:
 | run `release-train-join.yml` and `release-train-leave.yml` on the release branches, and the sync in the commercial repository from the OSS one | the commercial repository | **Actions: Read and write** | `repo` |
 | read the release train | the release train repository | **Contents: Read-only** | `repo` |
 
+## Setting a date as the owner of the token
+
+An edit by the user of the token is the handler's own, and is ignored. If you are that user (the token is yours), start the **description** of the milestone with **`!`**, in the same save as the due date: the handler runs for that edit, and takes the `!` out first. For the OSS milestone `7.0.9`:
+
+```
+Due date:     2026-11-19
+Description:  !Release Train: 2026.11.19
+              Notes of the release
+```
+
+becomes `Release Train: 2026.11.19` and the notes, once the release has joined. If there are no notes, the description is just `!`: that is enough, and it becomes `Release Train: 2026.11.19`. The edit that takes the `!` out is the handler's own, and is ignored, so it runs once. Only the first character of the description counts, and a `!` typed by another user is not taken out.
+
 ## Reading a run
 
-The summary of the run lists what it did, one line each: the milestones written, the releases that joined or left, and why it did nothing (`neither the due date nor the description changed`, `is not the version of a release`). A run for an edit of the handler's own ends with `Skipped`.
+The summary of the run lists what it did, one line each: the milestones written, the releases that joined or left, and why it did nothing (`neither the due date nor the description changed`, `is not the version of a release`). A run for an edit of the handler's own (the user of the token, without `!`) ends with `Skipped`.

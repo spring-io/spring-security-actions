@@ -23,7 +23,9 @@ An edit of any of the first three, in either repository, makes all of them follo
 
 Nothing is written to a milestone that is right already, so a run that is done again makes no edit. A milestone that is not the version of a release (`7.0.x`, `General Backlog`), a hotfix whose OSS milestone does not exist, and an edit of the title are left alone.
 
-**Its own edits.** The handler writes the milestones with the token, and each edit is an event that would run it again. An edit made by the user of the token (`sender`, `github.event.sender.login`) is therefore left alone, so the token must be that of a user that no one edits milestones as: a person who edits as that user is ignored too, and runs the workflow by hand.
+**Its own edits.** The handler writes the milestones with the token, and each edit is an event that would run it again. An edit made by the user of the token (`sender`, `github.event.sender.login`) is therefore left alone, and so is what the other automation does with the token (the code freeze closing a milestone, for one).
+
+**The owner of the token can ask.** If the **description starts with `!`**, the edit is run once, and the handler takes the `!` out first: set the due date, and put `!` at the start of the description, in the same save (`!Release Train: 2026.11.19`, or `!Notes`). The edit that takes it out has no `!`, and is left alone, so it does not run again. A description that is just `!` is enough, when there is nothing else to say. Only the first character counts, and only for the user of the token: a `!` typed by anyone else is left where it is. A run by hand (`workflow_dispatch`) has no sender, and always runs.
 
 ## What GitHub sends
 
@@ -46,7 +48,7 @@ So a field that was empty is **not** in `changes`, and `{}` is treated as no cha
 | `repository` | yes | `owner/repo` of the milestone that was edited, OSS or commercial. |
 | `milestone` | yes | Its title, `7.0.9`. |
 | `changes` | no | The field `changes` of the event, as JSON: `{"due_on":{"from":"2026-11-19T00:00:00Z"}}`. Empty for a run by hand. |
-| `sender` | no | `github.event.sender.login`. |
+| `sender` | no | `github.event.sender.login`, for an edit. Empty for a run by hand. |
 | `project` | no | The project id in the train, the name of the OSS repository by default. |
 | `release-train-repository` | no | `spring-io/release-train` by default. |
 | `dispatch` | no, `true` | `false` does not run the workflows that join and leave: it is for after the release joined, to write the lines. The release workflow does it. |
@@ -54,7 +56,7 @@ So a field that was empty is **not** in `changes`, and `{}` is treated as no cha
 
 ## Outputs
 
-`skipped`: `true` for an edit of the user of the token. `changed`: `true` if anything was done.
+`skipped`: `true` for an edit of the user of the token that does not start its description with `!`. `changed`: `true` if anything was done.
 
 ## Secrets and permissions
 

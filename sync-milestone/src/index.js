@@ -1,5 +1,5 @@
 import * as core from "@actions/core";
-import { createOctokit } from "./octokit.js";
+import { createOctokit, parseRepository } from "./octokit.js";
 import { execute, isMain } from "./run.js";
 import { repositoriesOf, syncMilestone } from "./sync.js";
 import { addSummary } from "./summary.js";
@@ -38,13 +38,37 @@ export async function isOwnEdit(octokit, sender) {
   }
 }
 
+/**
+ * What to do with an edit: it is the handler's own if the user of the token made it, and is
+ * left alone, unless that user means it: a description that starts with ! says so
+ * (`override`), and the handler takes the ! out before it does anything.
+ */
+export async function verdictOf(octokit, { repository, milestone, sender }) {
+  if (!(await isOwnEdit(octokit, sender))) {
+    return { skip: false, override: false };
+  }
+  const { owner, repo } = parseRepository(repository);
+  const milestones = await octokit.paginate(
+    octokit.rest.issues.listMilestones,
+    { owner, repo, state: "all", per_page: 100 },
+  );
+  const found = milestones.find((m) => m.title === milestone);
+  const override = Boolean(found?.description?.startsWith("!"));
+  return { skip: !override, override };
+}
+
 export async function main() {
   const repository = core.getInput("repository", { required: true });
   const title = core.getInput("milestone", { required: true });
   const octokit = createOctokit({ token: core.getInput("token") });
-  if (await isOwnEdit(octokit, core.getInput("sender"))) {
+  const verdict = await verdictOf(octokit, {
+    repository,
+    milestone: title,
+    sender: core.getInput("sender"),
+  });
+  if (verdict.skip) {
     core.info(
-      `${core.getInput("sender")} made the edit of ${title}, and is the user of the token: it is the edit of this handler, so it is left alone`,
+      `${core.getInput("sender")} made the edit of ${title}, and is the user of the token: it is the edit of this handler, so it is left alone (a description that starts with ! asks for it)`,
     );
     core.setOutput("skipped", "true");
     addSummary(
@@ -62,6 +86,7 @@ export async function main() {
       trainRepository:
         core.getInput("release-train-repository") || "spring-io/release-train",
       dispatch: core.getInput("dispatch") !== "false",
+      override: verdict.override,
     },
     { octokit, log: (line) => core.info(line) },
   );

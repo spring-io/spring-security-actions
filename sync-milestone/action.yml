@@ -12,7 +12,7 @@ inputs:
     description: "What the edit changed, the field `changes` of the milestone event of GitHub as JSON (due_on, description or title, each with from). Empty for a run by hand."
     required: false
   sender:
-    description: "Who made the edit (github.event.sender.login). An edit by the user of the token is the handler's own, and is left alone."
+    description: "Who made the edit (github.event.sender.login). An edit by the user of the token is the handler's own, and is left alone, unless the description of the milestone starts with ! (which is taken out)."
     required: false
   project:
     description: "The project id in the release train. The name of the OSS repository if it is not given."

@@ -58,6 +58,10 @@ export function repositoriesOf(repository) {
  * Nothing is written to a milestone that is right already, so that a run that is done again
  * makes no edit (and so no event of GitHub).
  *
+ * `override` is for an edit that the user of the token made on purpose: its description
+ * starts with !, which is taken out first (that edit is the handler's own, and is ignored,
+ * so it does not run it again).
+ *
  * `changes` is the field `changes` of the event of GitHub, with what the edit changed
  * (due_on, description or title, each with `from`). `dispatch` false does not run the
  * workflows to join and leave: it is for after the join was made, to write the lines.
@@ -70,6 +74,7 @@ export async function syncMilestone(
     project,
     trainRepository,
     dispatch = true,
+    override = false,
   },
   { octokit, log = () => {} },
 ) {
@@ -402,6 +407,17 @@ export async function syncMilestone(
   if (!RELEASE.test(title) && !HOTFIX.test(title)) {
     note(`${title} is not the version of a release: nothing to do`);
     return { actions };
+  }
+  if (override) {
+    const edited = await find(repository, title);
+    if (edited?.description?.startsWith("!")) {
+      await write(repository, edited, {
+        description: edited.description.slice(1),
+      });
+      note(
+        `${repository} ${title}: the ! at the start of the description is taken out`,
+      );
+    }
   }
   if (repository === oss) {
     await syncRelease(title, { fromOss: true });
