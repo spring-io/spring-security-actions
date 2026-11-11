@@ -6,7 +6,8 @@ name: sync-milestone
 #   - The due date of the OSS milestone of a release (7.0.9) is the date of its release train
 #     (2026-11-19 is the train 2026.11.19). The release, release/7.0.9, joins it; the hotfix,
 #     release/7.0.9.1, joins it too, and its milestone is due on the commercial general availability of
-#     the train. The commercial milestone of the release follows the due date.
+#     the train. The commercial milestone of the release follows the due date, and has the same line
+#     as the OSS milestone.
 #   - The commercial milestone of a long-term support version (5.8.30) names its train in its
 #     description, `Release Train: 2026.11.19`, and is due on the commercial general availability of it.
 #   - A release that was in another train leaves it first. A train that does not exist clears the due

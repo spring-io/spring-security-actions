@@ -40,8 +40,8 @@ export function repositoriesOf(repository) {
  * date (the train 2026.11.19 for a milestone due on 2026-11-19). Its hotfix (7.0.9.1) is in
  * the commercial repository, in the same train, and is due on the commercial general
  * availability of it. The commercial milestone of the release itself follows the due date.
- * The first line of the description of the OSS milestone, and the description of the
- * hotfix, name the train: `Release Train: 2026.11.19`. An edit of any of them, in either
+ * The first line of the description of the OSS milestone and of its commercial milestone, and
+ * the description of the hotfix, name the train: `Release Train: 2026.11.19`. An edit of any of them, in either
  * repository, makes them all follow the OSS milestone.
  *
  * A long-term support version (5.8.30) is only in the commercial repository, and its
@@ -334,9 +334,13 @@ export async function syncMilestone(
       description: withFirstLine(found.description, ossLine),
     });
     if (mirror) {
+      // the same first line as the OSS milestone, and the link to it after the text
       await write(host, mirror, {
         date: mirrorDate,
-        description: withLink(mirror.description, found.html_url),
+        description: withFirstLine(
+          withLink(mirror.description, found.html_url),
+          ossLine,
+        ),
       });
     }
     if (hotfix) {

@@ -9,7 +9,7 @@ A release of OSS (`7.0.9`) has its milestone in the OSS repository, and its **du
 | The milestone | The description | The due date |
 |---|---|---|
 | OSS `7.0.9` | `Release Train: 2026.11.19` as its first line, and any text after it | set by a person |
-| commercial `7.0.9` | `OSS milestone: <url>`, after any text | the one of the OSS milestone |
+| commercial `7.0.9` | `Release Train: 2026.11.19` as its first line (the same as the OSS milestone's, errors too), and `OSS milestone: <url>` after any text | the one of the OSS milestone |
 | commercial `7.0.9.1` (the hotfix) | `Release Train: 2026.11.19` | the commercial general availability of the train |
 | commercial `5.8.30` (long-term support) | typed by a person, with the line `Release Train: 2026.11.19` | the commercial general availability of the train |
 

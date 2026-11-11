@@ -96,7 +96,9 @@ describe("an OSS milestone gets a due date", () => {
       "Release Train: 2026.11.19\nNotes of the release",
     );
     expect(mirror.due_on).toBe("2026-11-19T12:00:00Z");
-    expect(mirror.description).toBe(`OSS milestone: ${oss.html_url}`);
+    expect(mirror.description).toBe(
+      `Release Train: 2026.11.19\nOSS milestone: ${oss.html_url}`,
+    );
     expect(fix.due_on).toBe("2026-12-24T12:00:00Z");
     expect(fix.description).toBe("Release Train: 2026.11.19");
   });
@@ -401,6 +403,67 @@ describe("a ! at the start of the description of an edit of the user of the toke
   });
 });
 
+describe("the commercial milestone of the release has the train line too", () => {
+  const joinedInOld = {
+    "2026.11.19": trainYaml({ joined: ["7.0.9", "7.0.9.1"] }),
+    "2026.12.17": trainYaml({ availability: "2027-01-21" }),
+  };
+
+  it("has the line of the new train when the due date changes, and keeps the link and the text", async () => {
+    const { oss, mirror, sync } = world({
+      ossDue: "2026-12-17",
+      trains: joinedInOld,
+    });
+    mirror.description = `Release Train: 2026.11.19\nmy notes\n\nOSS milestone: ${oss.html_url}`;
+    await sync({ changes: { due_on: { from } } });
+    expect(mirror.description).toBe(
+      `Release Train: 2026.12.17\nmy notes\n\nOSS milestone: ${oss.html_url}`,
+    );
+  });
+
+  it("has the same error as the OSS milestone if the train does not exist", async () => {
+    const { oss, mirror, sync } = world({
+      ossDue: "2026-12-31",
+      trains: joinedInOld,
+    });
+    await sync({ changes: { due_on: { from } } });
+    expect(mirror.description).toBe(
+      `ERROR: The Release Train 2026.12.31 doesn't exist\nOSS milestone: ${oss.html_url}`,
+    );
+    expect(mirror.due_on).toBeNull();
+  });
+
+  it("has the error that the release cannot join, like the OSS milestone", async () => {
+    const { mirror, oss, sync } = world({ branches: [] });
+    await sync({ changes: { due_on: { from: "" } } });
+    const first =
+      "ERROR: Cannot join the Release Train 2026.11.19: release/7.0.9 does not exist";
+    expect(oss.description.split("\n")[0]).toBe(first);
+    expect(mirror.description.split("\n")[0]).toBe(first);
+  });
+
+  it("loses the line, and keeps the link, when the due date is cleared", async () => {
+    const { oss, mirror, sync } = world({ ossDue: "", trains: joinedInOld });
+    mirror.description = `Release Train: 2026.11.19\nOSS milestone: ${oss.html_url}`;
+    await sync({ changes: { due_on: { from } } });
+    expect(mirror.description).toBe(`OSS milestone: ${oss.html_url}`);
+  });
+
+  it("is not written again when it is right", async () => {
+    const { github, oss, mirror, sync } = world({
+      trains: { "2026.11.19": trainYaml({ joined: ["7.0.9", "7.0.9.1"] }) },
+    });
+    mirror.description = `Release Train: 2026.11.19\nOSS milestone: ${oss.html_url}`;
+    mirror.due_on = "2026-11-19T12:00:00Z";
+    await sync({ repository: HOST, milestone: "7.0.9" });
+    expect(
+      github.updates.filter(
+        (u) => u.repository === HOST && u.number === mirror.number,
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("the other edits", () => {
   it("ignores an edit of the OSS milestone that is not of its due date or description", async () => {
     const { github, sync } = world();
@@ -457,7 +520,7 @@ describe("the other edits", () => {
     });
     expect(mirror.due_on).toBe("2026-11-19T12:00:00Z");
     expect(mirror.description).toBe(
-      `my notes\n\nOSS milestone: ${oss.html_url}`,
+      `Release Train: 2026.11.19\nmy notes\n\nOSS milestone: ${oss.html_url}`,
     );
   });
 

@@ -24,7 +24,7 @@ The description of the milestones says which train they are in, so that it can b
 | The milestone | Its description |
 |---|---|
 | OSS `7.0.9` | `Release Train: 2026.11.19` as the first line, and any text after it |
-| commercial `7.0.9` | `OSS milestone: <url>`, after any text |
+| commercial `7.0.9` | the same first line as the OSS milestone (`Release Train: 2026.11.19`, or its `ERROR:` line), and `OSS milestone: <url>` after any text |
 | commercial `7.0.9.1` | `Release Train: 2026.11.19` |
 | commercial `5.8.30` (long-term support) | typed by a person, with the line `Release Train: 2026.11.19`, anywhere in it |
 
