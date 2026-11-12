@@ -6,11 +6,10 @@ It runs with a **dry run on by default**: it plans, makes the merges and the ver
 
 ## Setup checklist
 
-1. **The caller**, `.github/workflows/code-freeze.yml`, on the embargoed branches of the commercial repository (it comes with the merges forward). See [the caller](#the-caller).
-2. **The stub**, a `code-freeze.yml` on the default branch of the commercial repository (`main`), which never receives the embargoed merges. See [the stub](#the-stub-on-the-default-branch).
-3. **The secret** `RELEASE_AUTOMATION_TOKEN` in the commercial repository, with the permissions of [the token](#the-token), and the variables `UBUNTU_RUNS_ON` (the runners of the organization) and, if it is not `spring-io/release-train`, `RELEASE_TRAIN_REPOSITORY` (the release train repository, `owner/repo`: the caller gives it as the input `release-train-repository`, and an empty value is the default).
-4. **The workflow `release-train-ready.yml`** on the release branches (the workflow generator makes it, as it does `release-train-join.yml`).
-5. For each release of the freeze, **`release/<version>` has been built and has joined the release train**: the release workflow does both when the embargoed branch is pushed.
+1. **The caller**, `.github/workflows/code-freeze.yml`, on the default branch of the commercial repository (`main`), and **only there**: GitHub lists a workflow that is run by hand only if its file is on the default branch, and the freeze does not depend on the branch it is started from. See [the caller](#the-caller).
+2. **The secret** `RELEASE_AUTOMATION_TOKEN` in the commercial repository, with the permissions of [the token](#the-token), and the variables `UBUNTU_RUNS_ON` (the runners of the organization) and, if it is not `spring-io/release-train`, `RELEASE_TRAIN_REPOSITORY` (the release train repository, `owner/repo`: the caller gives it as the input `release-train-repository`, and an empty value is the default).
+3. **The workflow `release-train-ready.yml`** on the release branches (the workflow generator makes it, as it does `release-train-join.yml`).
+4. For each release of the freeze, **`release/<version>` has been built and has joined the release train**: the release workflow does both when the embargoed branch is pushed.
 
 ## What it does
 
@@ -74,7 +73,7 @@ This is required, and it is enforced in code, not left to the order of the steps
 
 ## The caller
 
-A workflow of the commercial repository, run by hand. The run name has the release train. Call the workflow at the commit of a tag:
+A workflow on the default branch of the commercial repository, run by hand, and not on any embargoed branch (a copy there would have to be merged forward, and would be one more file to keep in step). The freeze checks out every branch of the repository and never reads the branch it was started from, so it does not matter which branch **Use workflow from** has: leave it at `main`. The run name has the release train. Call the workflow at the commit of a tag:
 
 ```yaml
 name: "Code Freeze"
@@ -115,47 +114,6 @@ jobs:
 ```
 
 In the Actions tab, **Run workflow** has the release train, the two branch lists, and the dry run, ticked. A run is listed as `2026.11.19: Code Freeze (dry run)`.
-
-## The stub on the default branch
-
-GitHub lists a workflow that is run by hand only if its file is on the default branch. The default branch of the commercial repository, `main`, never receives the embargoed merges, so the caller would not be listed. Put a file with the **same name and the same inputs** on `main`, whose only job fails with a hint:
-
-```yaml
-name: "Code Freeze"
-run-name: "${{ inputs.release-train }}: Code Freeze (use an embargoed branch)"
-"on":
-  workflow_dispatch:
-    inputs:
-      release-train:
-        description: "Release train, for example 2026.11.19"
-        required: true
-        type: string
-      branches:
-        description: "OSS branches to freeze, oldest first (7.1.x,main). Empty: all the OSS generations"
-        required: false
-        type: string
-      lts-branches:
-        description: "Long-term support generations to freeze, oldest first (6.4.x,6.5.x). Empty: all of them"
-        required: false
-        type: string
-      dry-run:
-        description: "Only log what would happen: nothing is pushed or marked ready"
-        default: true
-        type: boolean
-permissions:
-  contents: none
-jobs:
-  stub:
-    name: "Choose an embargoed branch"
-    runs-on: ubuntu-latest
-    steps:
-      - name: "Choose an embargoed branch in 'Use workflow from'"
-        run: |
-          echo "::error::This is the stub of the default branch, which makes the workflow show in the Actions tab. Choose a branch that has the real Code Freeze workflow, for example embargoed/active/main, in 'Use workflow from'."
-          exit 1
-```
-
-Running the stub by accident changes nothing. Choose a branch that has the real caller in **Use workflow from**. It has to be tried once that the form and the run use the file of the branch that is chosen.
 
 ## The token
 
