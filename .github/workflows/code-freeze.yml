@@ -26,8 +26,8 @@ name: code-freeze
 #      A dry run does the same from the versions of the plan, and writes nothing.
 #
 # This is a reusable workflow: the commercial repository of a project calls it from a workflow
-# that is run by hand (workflow_dispatch), see docs/code-freeze.md for the caller, the stub that
-# its default branch needs, and the secret. The OSS repository is the commercial one without
+# that is run by hand (workflow_dispatch), see docs/code-freeze.md for the caller (on its default
+# branch only), and the secret. The OSS repository is the commercial one without
 # -commercial. The actions are the ones of this repository, each in a directory of its own with a
 # README. Nothing in this workflow is a script: what it does is in the actions.
 
