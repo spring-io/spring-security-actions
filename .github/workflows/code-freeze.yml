@@ -14,7 +14,8 @@ name: code-freeze
 #      after the merge across of the branch before it), and then the embargoed ones, which merge
 #      the finished OSS branches down. Each frozen branch is then fast forwarded to its active one.
 #   3. Check: no commit that only the commercial repository has goes to OSS, and both pushes would
-#      be accepted (git push --dry-run). A dry run ends here.
+#      be accepted (git push --dry-run). A dry run ends here, after it has attached the changed
+#      branches to the run (a zip to look at, export-freeze).
 #   4. Ready: release-train-ready.yml of the project runs on each release branch, and is waited for.
 #   5. Push: the commercial repository, then OSS, each in one atomic push, without force.
 #   6. Milestones: the milestone of each release is closed (none is deleted). Then the milestones of the
@@ -119,6 +120,24 @@ jobs:
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Merge and bump the versions, locally
         uses: spring-io/spring-security-actions/apply-freeze@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+      # A dry run keeps the merges and the version commits, which end with the run: the branches are
+      # attached to it, as those of the post-publish dry run are, and before the check, so that they can
+      # be looked at when the check fails. It is for looking only: it has no remote and no command that
+      # pushes.
+      - name: Export the branches that the freeze changed
+        id: export
+        if: ${{ inputs.dry-run }}
+        uses: spring-io/spring-security-actions/export-freeze@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        with:
+          dry-run: true
+      - name: Attach the changes to the run
+        if: ${{ steps.export.outputs.count != '' && steps.export.outputs.count != '0' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.export.outputs.name }}
+          path: ${{ steps.export.outputs.directory }}
+          include-hidden-files: true
+          overwrite: true
       # Nothing from the commercial repository may reach OSS, and the pushes must be accepted: this is
       # found out before anything is marked ready, which cannot be undone.
       - name: Check that no commercial code goes to OSS, and that the pushes would be accepted

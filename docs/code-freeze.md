@@ -21,6 +21,7 @@ It runs with a **dry run on by default**: it plans, makes the merges and the ver
    - the milestone of a hotfix (`7.0.5.1`) does not exist in the commercial repository (the release workflow creates it),
    - the override is wrong (a branch that is not of that kind, the wrong order, a gap in the middle, a duplicate).
 2. **Apply**, in a clone. The OSS branches first, from the OSS repository alone; then the embargoed ones; then each frozen branch is fast forwarded to its active branch.
+   **A dry run attaches the result to the run** (`export-freeze`): the artifact `code-freeze-changes-<release train>` is a zip with a git repository of the branches that the freeze changed, each with its history, and a README with the table (repository, commit, the commit before, and the number of new commits) and the commands to look at them. It is for looking only: it has no remote and nothing that pushes. It is made before the check, so it is there when the check fails, and a real run has none, as its pushes are the record.
 3. **Check**: nothing commercial goes to OSS, and both pushes would be accepted. **A dry run ends here.**
 4. **Ready**: `release-train-ready.yml` runs on each `release/<version>`, and the freeze waits for it. A release that is ready in the train already is skipped, and its branches are bumped all the same. Ready cannot be undone, so it comes after everything that can be checked, and before any bump is pushed.
 5. **Push**: the commercial repository, then OSS, each in one atomic push without force.
