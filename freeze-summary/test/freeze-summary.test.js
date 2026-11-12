@@ -5,6 +5,7 @@ const plan = {
   project: "spring-security",
   train: "2026.11.19",
   problems: [],
+  joined: ["7.0.5", "7.0.5.1", "6.5.11"],
   oss: [
     {
       generation: "7.0.x",
@@ -318,6 +319,14 @@ describe("render", () => {
     expect(markdown).toContain(
       "[The run could not be found](https://example.com/runs)",
     );
+  });
+
+  it("says that every release that joined the train is marked ready, in a dry run or not", () => {
+    for (const dryRun of [true, false]) {
+      expect(render({ plan, dryRun })).toContain(
+        "All 3 releases of spring-security that joined the release train 2026.11.19 are marked ready by this freeze. Nothing is left joined and not ready.",
+      );
+    }
   });
 
   it("says that a release is ready already, in a dry run or not", () => {

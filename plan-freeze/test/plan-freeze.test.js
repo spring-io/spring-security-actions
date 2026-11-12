@@ -238,7 +238,11 @@ describe("planFreeze", () => {
   it("plans no hotfix for an active branch that has nothing the frozen one lacks, nor for a .0 that is not GA", async () => {
     const { fixture, run } = setup(
       {},
-      { ossBranches: ["7.1.x"], ltsGenerations: [] },
+      {
+        ossBranches: ["7.1.x"],
+        ltsGenerations: [],
+        trainDocument: trainWith("spring-security", { "7.1.1": joined }),
+      },
     );
     git(
       fixture.seed,
@@ -252,6 +256,27 @@ describe("planFreeze", () => {
     const plan = await run();
     expect(plan.problems).toEqual([]);
     expect(plan.releases.map((r) => r.version)).toEqual(["7.1.1"]);
+  });
+
+  it("plans a hotfix that has joined the train, even if the active branch has nothing the frozen one lacks", async () => {
+    const { fixture, run } = setup(
+      {},
+      { ossBranches: ["7.1.x"], ltsGenerations: [] },
+    );
+    git(
+      fixture.seed,
+      "push",
+      "-q",
+      "--force",
+      "commercial",
+      "embargoed/frozen/7.1.x:embargoed/active/7.1.x",
+    );
+    git(fixture.work, "fetch", "-q", "origin");
+    const plan = await run();
+    expect(plan.releases.map((r) => [r.version, r.unchanged])).toEqual([
+      ["7.1.1", undefined],
+      ["7.1.1.1", true],
+    ]);
   });
 
   it("plans the hotfix of a .0 version only for its GA", async () => {
@@ -276,6 +301,45 @@ describe("planFreeze", () => {
           /release\/7\.1\.1 has not joined the release train 2026\.11\.19/,
         ),
       ]);
+    });
+
+    it("says that a release that joined the train is left behind by the freeze, before anything is done", async () => {
+      const { run } = setup(
+        {},
+        {
+          ossBranches: ["7.1.x"],
+          ltsGenerations: [],
+          trainDocument: train({ "9.9.9": joined }),
+        },
+      );
+      const plan = await run();
+      expect(plan.problems).toEqual([
+        expect.stringMatching(
+          /release\/7\.0\.5 has joined the release train 2026\.11\.19, but no branch of this freeze builds it/,
+        ),
+        expect.stringMatching(/release\/7\.0\.5\.1 has joined/),
+        expect.stringMatching(/release\/7\.2\.0-M2 has joined/),
+        expect.stringMatching(/release\/6\.5\.11 has joined/),
+        expect.stringMatching(/release\/9\.9\.9 has joined/),
+      ]);
+    });
+
+    it("does not count a release that is ready already, nor one of another project, as left behind", async () => {
+      const { run } = setup(
+        {},
+        {
+          trainDocument: {
+            releases: {
+              ...train({ "9.9.9": { joined: "a", ready: "b" } }).releases,
+              "spring-session": { "4.0.6": { "commit-hashes": joined } },
+            },
+          },
+        },
+      );
+      const plan = await run();
+      expect(plan.problems).toEqual([]);
+      expect(plan.joined).toContain("9.9.9");
+      expect(plan.joined).not.toContain("4.0.6");
     });
 
     it("does not stop for a release that is ready already: it is not marked ready again", async () => {

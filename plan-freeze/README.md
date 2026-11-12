@@ -8,7 +8,7 @@ For every OSS branch (`7.0.x`, `main`) it reads `gradle.properties` of the OSS b
 
 **The next version.** The last segment plus one (`7.0.5-SNAPSHOT` gives `7.0.6-SNAPSHOT`). A `.0` version is the exception: it stays while the release that is made is not the GA, and is `x.y.1-SNAPSHOT` once it is. The release that is made is the open milestone with the earliest due date (`7.2.0-M2`, `7.2.0-RC1` or `7.2.0`), so a milestone `x.y.0` that was created early does not bump the version while a release candidate is made. A version that stays gets no commit. The milestones are read from the OSS repository and from the commercial one.
 
-**The releases to mark ready.** The release of a branch is worked out as `compute-release-version` does (`7.0.5`, or for a `.0` version the open milestone with the earliest due date: `7.2.0-M2`). `release/7.0.5` is built from the frozen branch, and is the release of the OSS branch too. The active branch has the hotfix `release/7.0.5.1` if it has changes that the frozen one lacks (and a `.0` only for its GA). Each release branch is listed once, with its milestone (`repository`, `number`, `url`, `state` and the `open` and `closed` issues), which `close-milestones` closes after the freeze: the OSS repository has the milestone of the releases of the OSS and frozen branches, and the commercial one has those of a hotfix and of long-term support. A release has `hotfix: true` for the hotfix.
+**The releases to mark ready.** The release of a branch is worked out as `compute-release-version` does (`7.0.5`, or for a `.0` version the open milestone with the earliest due date: `7.2.0-M2`). `release/7.0.5` is built from the frozen branch, and is the release of the OSS branch too. The active branch has the hotfix `release/7.0.5.1` if it has changes that the frozen one lacks, **or if the hotfix has joined the release train** (and a `.0` only for its GA): a hotfix that joined when the active branch had changes may be in use, so it is made ready even if the active branch has nothing that the frozen one lacks now (the entry has `unchanged: true`, and the log says so). Each release branch is listed once, with its milestone (`repository`, `number`, `url`, `state` and the `open` and `closed` issues), which `close-milestones` closes after the freeze: the OSS repository has the milestone of the releases of the OSS and frozen branches, and the commercial one has those of a hotfix and of long-term support. A release has `hotfix: true` for the hotfix.
 
 **The milestones of the cycle.** The plan has the milestones of the releases that are made (`releases`), which `close-milestones` closes. It does not plan the others: the step [ensure-milestones](../ensure-milestones/README.md) reads the version of `gradle.properties` after the freeze has bumped it, and closes and makes the milestones of the cycle from it (see [the code freeze guide](../docs/code-freeze.md#the-milestones-of-a-cycle)). Its dry run uses `next` of this plan.
 
@@ -20,7 +20,8 @@ All of these are listed together, and the plan is written all the same, for the 
 - a branch does not exist, or has no `version=`, or the three branches of a generation have different versions,
 - a `.0` version has no open milestone,
 - the milestone of a hotfix does not exist in the commercial repository (the release workflow creates it),
-- a `release/<version>` does not exist or has not joined the release train, or the train has not been created.
+- a `release/<version>` does not exist or has not joined the release train, or the train has not been created,
+- a release of the project that **has joined the train** (and is not ready) is not one that the freeze makes ready: it would stay joined, and the train could not go on. This is looked at up front, once nothing else is wrong (a skipped branch plans no release), and the plan has `joined`, every release of the project that joined or is ready.
 
 A release that is **ready already** in the train is not a problem: its entry in `releases` has `alreadyReady: true`, it is not marked ready again, and its branches are bumped all the same.
 
@@ -42,7 +43,7 @@ A release that is **ready already** in the train is not a problem: its entry in 
 
 ## Outputs
 
-`plan-file`. The plan has `oss` and `lts` (each branch with `current`, `next` and `bump`), `releases` (`version`, `branch`, `builtFrom`, `of`, `hotfix`, `milestone`), and `problems`.
+`plan-file`. The plan has `oss` and `lts` (each branch with `current`, `next` and `bump`), `releases` (`version`, `branch`, `builtFrom`, `of`, `hotfix`, `milestone`), `joined` (the versions of the project that joined the train) and `problems`.
 
 ## Secrets and permissions
 

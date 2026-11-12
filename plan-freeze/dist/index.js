@@ -36894,8 +36894,11 @@ function ltsBranchesOf({ directory, remote, generations, problems }) {
  *   embargoed/lts branch with a version of its major and minor (2021.2.x is embargoed/lts/2.7.x).
  * - A release is built from the branch: release/7.0.5 from the frozen branch (it is the release
  *   of the OSS branch too), release/7.0.5.1 from the active branch if it has changes that the
- *   frozen one lacks (the hotfix), release/6.5.11 from a long-term support branch. Each must
- *   exist and have joined the release train. One that is ready already is not marked ready again.
+ *   frozen one lacks, or if it has joined the release train (the hotfix), release/6.5.11 from a
+ *   long-term support branch. Each must exist and have joined the release train. One that is
+ *   ready already is not marked ready again.
+ * - Every release of the project that has joined the train must be one of these: one that would
+ *   stay joined and not ready is a problem, found before anything is done.
  */
 async function planFreeze(
   {
@@ -36934,6 +36937,14 @@ async function planFreeze(
   const releases = new Map();
   const ossMilestones = await readMilestones(ossRepository);
   const commercialMilestones = await readMilestones(hostRepository);
+
+  /** The entry of a release of the project in the release train: its commit hashes. */
+  const hashesOf = (version) =>
+    trainDocument?.releases?.[project]?.[version]?.["commit-hashes"] ?? {};
+  const joinedInTrain = (version) => {
+    const hashes = hashesOf(version);
+    return Boolean(hashes.joined || hashes.ready);
+  };
 
   /** The milestone of a release, to be closed after the freeze: undefined if there is none. */
   const milestoneOf = (milestones, repository, title) => {
@@ -37035,7 +37046,10 @@ async function planFreeze(
     const differs =
       gitTry(directory, "diff", "--quiet", `${refs[frozen]}...${refs[active]}`)
         .code !== 0;
-    if (hotfix && differs) {
+    // A hotfix that has joined the train is made ready, even if the active branch has nothing that
+    // the frozen one lacks now: it joined when it had, and others may be using it.
+    const joinedHotfix = hotfix && joinedInTrain(hotfix);
+    if (hotfix && (differs || joinedHotfix)) {
       // the milestone of a hotfix is in the commercial repository
       const milestone = milestoneOf(
         commercialMilestones,
@@ -37048,6 +37062,9 @@ async function planFreeze(
         );
       }
       release(hotfix, active, [active], milestone, true);
+      if (!differs) {
+        releases.get(hotfix).unchanged = true;
+      }
     }
   }
 
@@ -37112,15 +37129,31 @@ async function planFreeze(
       );
       continue;
     }
-    const hashes =
-      trainDocument?.releases?.[project]?.[entry.version]?.["commit-hashes"] ??
-      {};
+    const hashes = hashesOf(entry.version);
     if (hashes.ready) {
       // marked ready already: nothing to do for it, and the branch is bumped all the same
       entry.alreadyReady = true;
     } else if (!hashes.joined) {
       problems.push(
         `${entry.branch} has not joined the release train ${train}: join it (the release workflow does that when ${entry.builtFrom} is pushed), or leave ${entry.of[0]} out of the branches to freeze`,
+      );
+    }
+  }
+
+  // Every release of the project that has joined this train must be made ready by this freeze:
+  // one that joined and is left behind stays joined, and the train cannot go on without it. This is
+  // looked at up front, before any branch is merged, marked ready or pushed.
+  const joined = trainFound
+    ? Object.keys(trainDocument?.releases?.[project] ?? {}).filter(
+        joinedInTrain,
+      )
+    : [];
+  // Not while another problem is open: a branch that was skipped plans no release, and everything that
+  // joined would look left behind. Once those are fixed, this is looked at.
+  for (const version of problems.length === 0 ? joined : []) {
+    if (!releases.has(version) && !hashesOf(version).ready) {
+      problems.push(
+        `release/${version} has joined the release train ${train}, but no branch of this freeze builds it, so it would stay joined and not ready: add the branch that builds it to the freeze, or take it out of the train`,
       );
     }
   }
@@ -37133,6 +37166,7 @@ async function planFreeze(
     oss,
     lts,
     releases: [...releases.values()],
+    joined,
     problems,
   };
 }
@@ -37202,7 +37236,7 @@ async function main() {
     info(
       entry.alreadyReady
         ? `${entry.branch} is ready already (${entry.of.join(", ")})`
-        : `${entry.branch} is to be marked ready (${entry.of.join(", ")})`,
+        : `${entry.branch} is to be marked ready (${entry.of.join(", ")}${entry.unchanged ? "; joined the train, nothing differs from the frozen branch" : ""})`,
     );
   }
   if (plan.problems.length > 0) {

@@ -28625,6 +28625,7 @@ var __webpack_exports__ = {};
 // EXPORTS
 __nccwpck_require__.d(__webpack_exports__, {
   ht: () => (/* binding */ ensuredTable),
+  wl: () => (/* binding */ joinedCheck),
   iW: () => (/* binding */ main),
   Yf: () => (/* binding */ mergesTable),
   s0: () => (/* binding */ milestonesTable),
@@ -31738,6 +31739,17 @@ const readyCell = ({ release, ready, dryRun }) => {
   return `[Failed: ${result.conclusion}](${result.runUrl})`;
 };
 
+/**
+ * The check that every release of the project that joined the train is made ready by the freeze:
+ * the plan stops for one that is left out, so a plan without problems has covered them all.
+ */
+function joinedCheck(plan) {
+  const joined = plan.joined ?? [];
+  const ready = plan.releases.filter((r) => r.alreadyReady).length;
+  const subject = `${joined.length === 1 ? "The release" : `All ${joined.length} releases`} of ${plan.project} that joined the release train ${plan.train}`;
+  return `${subject} ${joined.length === 1 ? "is" : "are"} marked ready by this freeze${ready > 0 ? ` (${ready} ready already)` : ""}. Nothing is left joined and not ready.`;
+}
+
 /** The releases that are marked ready, each once, with the branches that it is the release of. */
 function readyTable(plan, ready, dryRun) {
   return table(
@@ -31914,7 +31926,7 @@ function render({
   }
   if (plan.problems?.length === 0 && plan.releases.length > 0) {
     parts.push(
-      `## Releases marked ready in the release train ${plan.train}\nEach release branch is marked ready once, before any bump is pushed, by running release-train-ready.yml on that branch.\n\n${readyTable(plan, ready, dryRun)}`,
+      `## Releases marked ready in the release train ${plan.train}\nEach release branch is marked ready once, before any bump is pushed, by running release-train-ready.yml on that branch.\n\n${joinedCheck(plan)}\n\n${readyTable(plan, ready, dryRun)}`,
     );
   }
   if (apply) {
@@ -31962,10 +31974,11 @@ if (isMain(import.meta.url)) {
 }
 
 var __webpack_exports__ensuredTable = __webpack_exports__.ht;
+var __webpack_exports__joinedCheck = __webpack_exports__.wl;
 var __webpack_exports__main = __webpack_exports__.iW;
 var __webpack_exports__mergesTable = __webpack_exports__.Yf;
 var __webpack_exports__milestonesTable = __webpack_exports__.s0;
 var __webpack_exports__readyTable = __webpack_exports__.c5;
 var __webpack_exports__render = __webpack_exports__.XX;
 var __webpack_exports__versionsTable = __webpack_exports__.Ks;
-export { __webpack_exports__ensuredTable as ensuredTable, __webpack_exports__main as main, __webpack_exports__mergesTable as mergesTable, __webpack_exports__milestonesTable as milestonesTable, __webpack_exports__readyTable as readyTable, __webpack_exports__render as render, __webpack_exports__versionsTable as versionsTable };
+export { __webpack_exports__ensuredTable as ensuredTable, __webpack_exports__joinedCheck as joinedCheck, __webpack_exports__main as main, __webpack_exports__mergesTable as mergesTable, __webpack_exports__milestonesTable as milestonesTable, __webpack_exports__readyTable as readyTable, __webpack_exports__render as render, __webpack_exports__versionsTable as versionsTable };

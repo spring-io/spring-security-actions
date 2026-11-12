@@ -14,7 +14,8 @@ name: code-freeze
 #      after the merge across of the branch before it), and then the embargoed ones, which merge
 #      the finished OSS branches down. Each frozen branch is then fast forwarded to its active one.
 #   3. Check: no commit that only the commercial repository has goes to OSS, and both pushes would
-#      be accepted (git push --dry-run). A dry run ends here.
+#      be accepted (git push --dry-run). A dry run ends here, after it has attached the changed
+#      branches to the run (a zip to look at, export-freeze).
 #   4. Ready: release-train-ready.yml of the project runs on each release branch, and is waited for.
 #   5. Push: the commercial repository, then OSS, each in one atomic push, without force.
 #   6. Milestones: the milestone of each release is closed (none is deleted). Then the milestones of the
@@ -87,27 +88,27 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Set the git identity
-        uses: spring-io/spring-security-actions/git-identity@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/git-identity@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
       - name: Name the repositories
         id: repositories
-        uses: spring-io/spring-security-actions/name-repositories@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/name-repositories@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
       - name: List the branches to freeze
         id: branches
-        uses: spring-io/spring-security-actions/list-branches@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/list-branches@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
         with:
           project: ${{ steps.repositories.outputs.project }}
           branches: ${{ inputs.branches }}
           lts-branches: ${{ inputs.lts-branches }}
       - name: Read the release train
         id: train
-        uses: spring-io/spring-security-actions/load-train@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/load-train@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
         with:
           release-train-repository: ${{ inputs.release-train-repository || 'spring-io/release-train' }}
           branch: ${{ inputs.release-train }}
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Plan the freeze
         id: plan
-        uses: spring-io/spring-security-actions/plan-freeze@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/plan-freeze@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
         with:
           project: ${{ steps.repositories.outputs.project }}
           oss-repository: ${{ steps.repositories.outputs.oss-repository }}
@@ -118,29 +119,47 @@ jobs:
           train-file: ${{ steps.train.outputs.train-file }}
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Merge and bump the versions, locally
-        uses: spring-io/spring-security-actions/apply-freeze@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/apply-freeze@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
+      # A dry run keeps the merges and the version commits, which end with the run: the branches are
+      # attached to it, as those of the post-publish dry run are, and before the check, so that they can
+      # be looked at when the check fails. It is for looking only: it has no remote and no command that
+      # pushes.
+      - name: Export the branches that the freeze changed
+        id: export
+        if: ${{ inputs.dry-run }}
+        uses: spring-io/spring-security-actions/export-freeze@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
+        with:
+          dry-run: true
+      - name: Attach the changes to the run
+        if: ${{ steps.export.outputs.count != '' && steps.export.outputs.count != '0' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.export.outputs.name }}
+          path: ${{ steps.export.outputs.directory }}
+          include-hidden-files: true
+          overwrite: true
       # Nothing from the commercial repository may reach OSS, and the pushes must be accepted: this is
       # found out before anything is marked ready, which cannot be undone.
       - name: Check that no commercial code goes to OSS, and that the pushes would be accepted
-        uses: spring-io/spring-security-actions/push-freeze@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/push-freeze@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
         with:
           mode: check
       - name: Mark the releases ready in the release train
         if: ${{ !inputs.dry-run }}
-        uses: spring-io/spring-security-actions/ready-train@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/ready-train@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
         with:
           release-train-repository: ${{ inputs.release-train-repository || 'spring-io/release-train' }}
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Push the commercial repository, and then OSS
         if: ${{ !inputs.dry-run }}
-        uses: spring-io/spring-security-actions/push-freeze@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/push-freeze@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
         with:
           mode: push
       # Last, so that a push that failed leaves the milestones open and the freeze can run again. Every
       # milestone is closed, with open issues too, and none is deleted.
       - name: Close the milestones of the releases
         if: ${{ !inputs.dry-run }}
-        uses: spring-io/spring-security-actions/close-milestones@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/close-milestones@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
         with:
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       # After the closing, and from the version of gradle.properties that the push left on the branches,
@@ -148,7 +167,7 @@ jobs:
       # milestones of a project (the workflow sync-milestone). A milestone that is right is left alone.
       - name: Make and close the milestones of the cycle
         if: ${{ !inputs.dry-run }}
-        uses: spring-io/spring-security-actions/ensure-milestones@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/ensure-milestones@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
         with:
           repository: ${{ steps.repositories.outputs.commercial-repository }}
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
@@ -156,7 +175,7 @@ jobs:
       # taken as closed. It writes nothing.
       - name: Say what the milestones of the cycle would be
         if: ${{ inputs.dry-run }}
-        uses: spring-io/spring-security-actions/ensure-milestones@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/ensure-milestones@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
         with:
           repository: ${{ steps.repositories.outputs.commercial-repository }}
           plan-file: ${{ steps.plan.outputs.plan-file }}
@@ -164,7 +183,7 @@ jobs:
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Summarize the freeze
         if: ${{ always() }}
-        uses: spring-io/spring-security-actions/freeze-summary@e53d2d7b361d76546b4f8fcdb8fbfd32cfd38a64 # 0.0.31
+        uses: spring-io/spring-security-actions/freeze-summary@519611f8fa4f5d1f82be64c4268db0b5fba55b50 # 0.0.31
         with:
           dry-run: ${{ inputs.dry-run }}
           job-status: ${{ job.status }}
