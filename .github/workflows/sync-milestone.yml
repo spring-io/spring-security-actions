@@ -17,12 +17,13 @@ name: sync-milestone
 #   - An edit of the commercial milestone of an OSS version, or of its hotfix, is put right from the
 #     OSS milestone.
 #
-# By hand, it can sync one milestone (and what follows it), or all of them (all), and the dry run only
-# says what it would do. With all it first makes and closes the milestones of the cycle from the versions
-# of the branches (the step of the code freeze), and then syncs the trains. Every night the caller runs it with all and rebuild: the milestones are synced,
-# and the release workflow is started on the embargoed branches (until the release is ready), so that
-# every branch is built again with the dependency updates that the train has, and tested. See
-# docs/milestones.md.
+# By hand, it can sync one milestone (and what follows it), or all of them (no milestone), and the dry
+# run only says what it would do. A run for a milestone builds its releases again, as an edit that
+# changes the train does: the dependency updates of the train may have changed. With no milestone it first
+# makes and closes the milestones of the cycle from the versions of the branches (the step of the code
+# freeze), syncs the trains, and starts the release workflow on all the embargoed branches (until the
+# release is ready), so that every branch is built again with the dependency updates that the train has,
+# and tested. Every night the caller runs it with no milestone. See docs/milestones.md.
 #
 # An edit by the user of the token is the one of this workflow, and is left alone, unless the description
 # starts with ! (the owner of the token asking for a run: the ! is taken out, and it runs once).
@@ -40,20 +41,10 @@ on:
         type: string
         required: true
       milestone:
-        description: "The title of the milestone that was edited, for example 7.0.9. Not needed with all"
+        description: "The title of the milestone to sync, for example 7.0.9. Empty syncs all of them, and builds all the release branches again (the nightly run)"
         type: string
         required: false
         default: ""
-      all:
-        description: "Sync every open milestone of the project that has a release, for a run by hand"
-        type: boolean
-        required: false
-        default: false
-      rebuild:
-        description: "With all, start the release workflow on the embargoed branches, so that each release is built again against its train and joins it (the nightly run)"
-        type: boolean
-        required: false
-        default: false
       dry-run:
         description: "Write nothing and run nothing: the summary says what would be done"
         type: boolean
@@ -100,10 +91,10 @@ jobs:
     name: Sync the milestone
     runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     steps:
-      # By hand, with all: first the milestones of the cycle, from the version of gradle.properties as
+      # With no milestone, which syncs all of them: first the milestones of the cycle, from the version of gradle.properties as
       # the branches are now, as the code freeze does after the bump (see docs/milestones.md).
       - name: Make and close the milestones of the cycle
-        if: ${{ inputs.all }}
+        if: ${{ inputs.milestone == '' }}
         uses: spring-io/spring-security-actions/ensure-milestones@bd3cae229836f13ec484a981b94caf041e8cb4d9 # 0.0.27
         with:
           repository: ${{ inputs.repository }}
@@ -114,8 +105,6 @@ jobs:
         with:
           repository: ${{ inputs.repository }}
           milestone: ${{ inputs.milestone }}
-          all: ${{ inputs.all }}
-          rebuild: ${{ inputs.rebuild }}
           dry-run: ${{ inputs.dry-run }}
           changes: ${{ inputs.changes }}
           sender: ${{ inputs.sender }}

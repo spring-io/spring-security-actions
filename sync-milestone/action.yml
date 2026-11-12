@@ -6,7 +6,7 @@ inputs:
     description: "The repository (owner/repo) of the milestone that was edited: the OSS repository or the commercial one"
     required: true
   milestone:
-    description: "The title of the milestone that was edited, 7.0.9. Not needed with `all`"
+    description: "The title of the milestone to sync, 7.0.9. Without it, every open milestone of the project that has a release is synced (the OSS ones, with their commercial milestone and hotfix, and the commercial ones of long-term support), and then all the release branches are built again. For one milestone, `changes` says what the edit changed: a run with no `changes` builds the releases of the milestone again."
     required: false
   changes:
     description: "What the edit changed, the field `changes` of the milestone event of GitHub as JSON (due_on, description or title, each with from). Empty for a run by hand."
@@ -21,14 +21,6 @@ inputs:
     description: "The release train repository (owner/repo)"
     required: false
     default: "spring-io/release-train"
-  all:
-    description: "`true` syncs every open milestone of the project that has a release (the OSS ones, with their commercial milestone and hotfix, and the commercial ones of long-term support), for a run by hand. The milestone, changes and sender are not used."
-    required: false
-    default: "false"
-  rebuild:
-    description: "`true`, with `all`, then starts the release workflow on the embargoed branches (the frozen and long-term support ones first, the active ones after them) so that each release branch and snapshot branch is built again, with the dependency updates of the train, and joins it. A release that is ready, and the time of a code freeze, are skipped."
-    required: false
-    default: "false"
   dry-run:
     description: "`true` writes nothing and runs nothing: the summary says what would be done"
     required: false

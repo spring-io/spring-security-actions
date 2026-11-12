@@ -117,20 +117,22 @@ async function mainAll(octokit, repository) {
     },
     { octokit, log: (line) => core.info(line) },
   );
-  let rebuilds = [];
-  if (core.getInput("rebuild") === "true") {
-    ({ results: rebuilds } = await rebuildReleases(
-      {
-        repositories: repositoriesOf(repository),
-        project: core.getInput("project") || oss.split("/")[1],
-        trainRepository:
-          core.getInput("release-train-repository") ||
-          "spring-io/release-train",
-        dryRun,
-      },
-      { octokit, log: (line) => core.info(line) },
-    ));
-  }
+  // all the releases are built again, as the nightly run does: the trains may have new dependencies
+  // (`dispatch` false runs nothing)
+  const { results: rebuilds } =
+    core.getInput("dispatch") === "false"
+      ? { results: [] }
+      : await rebuildReleases(
+          {
+            repositories: repositoriesOf(repository),
+            project: core.getInput("project") || oss.split("/")[1],
+            trainRepository:
+              core.getInput("release-train-repository") ||
+              "spring-io/release-train",
+            dryRun,
+          },
+          { octokit, log: (line) => core.info(line) },
+        );
   core.setOutput("skipped", "false");
   core.setOutput(
     "changed",
@@ -151,10 +153,11 @@ async function mainAll(octokit, repository) {
 export async function main() {
   const repository = core.getInput("repository", { required: true });
   const octokit = createOctokit({ token: core.getInput("token") });
-  if (core.getInput("all") === "true") {
+  const title = core.getInput("milestone");
+  // no milestone is all of them
+  if (!title) {
     return mainAll(octokit, repository);
   }
-  const title = core.getInput("milestone", { required: true });
   const verdict = await verdictOf(octokit, {
     repository,
     milestone: title,

@@ -73,7 +73,8 @@ export function repositoriesOf(repository) {
  * `changes` is the field `changes` of the event of GitHub, with what the edit changed
  * (due_on, description or title, each with `from`). `dispatch` false runs nothing (no leave,
  * no rebuild) and takes the releases as joined: it is for after the release workflow joined,
- * to write the lines. `rebuild` false does not start the rebuild (the nightly run does it).
+ * to write the lines. `rebuild` false does not start the rebuild (the run for all does it). A run
+ * for one milestone with no `changes` (by hand) builds its releases again, whatever the train.
  */
 export async function syncMilestone(
   {
@@ -224,8 +225,8 @@ export async function syncMilestone(
     !dispatch || Boolean(hashesOf(train, project, version).joined);
 
   // starts the release workflow on the branches of the releases, which builds them against the
-  // train and joins it
-  const rebuildAfterChange = async (versions) => {
+  // train and joins it. `why` is said in the summary: the train changed, or a person asked
+  const rebuildAfterChange = async (versions, why) => {
     if (!dispatch || !rebuild) {
       return;
     }
@@ -242,7 +243,7 @@ export async function syncMilestone(
     for (const r of results) {
       events.push({ type: "rebuild", branch: r.branch, result: r.result });
       note(
-        `${r.branch} (${r.release}): ${dryRun ? "would be rebuilt" : r.result}${r.reason ? `, ${r.reason}` : ""}`,
+        `${r.branch} (${r.release}): ${dryRun ? "would be rebuilt" : r.result} (${why})${r.reason ? `, ${r.reason}` : ""}`,
       );
     }
     const failed = results.filter((r) => r.result === "failed");
@@ -384,13 +385,16 @@ export async function syncMilestone(
       });
     }
     // the due date moved, and the train that it is in now has not got the release: build it
-    // again, which joins it
-    if (
-      changes?.due_on &&
+    // again, which joins it. A run by hand for the milestone (it has no changes) builds it
+    // again too, as the dependency updates of its train may have changed
+    if (!changes) {
+      await rebuildAfterChange(versions, "requested");
+    } else if (
+      changes.due_on &&
       train?.found &&
       !hashesOf(train, project, ossTitle).joined
     ) {
-      await rebuildAfterChange(versions);
+      await rebuildAfterChange(versions, "train changed");
     }
   };
 
@@ -442,8 +446,13 @@ export async function syncMilestone(
       return;
     }
     await write(host, found, { date: availability });
-    if (changes?.description && !hashesOf(train, project, ltsTitle).joined) {
-      await rebuildAfterChange([ltsTitle]);
+    if (!changes) {
+      await rebuildAfterChange([ltsTitle], "requested");
+    } else if (
+      changes.description &&
+      !hashesOf(train, project, ltsTitle).joined
+    ) {
+      await rebuildAfterChange([ltsTitle], "train changed");
     }
   };
 

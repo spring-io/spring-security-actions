@@ -18,7 +18,7 @@ A release of OSS (`7.0.9`) has its milestone in the OSS repository, and its **du
 An edit of any of the first three, in either repository, makes all of them follow the OSS milestone: what was typed in the commercial milestone of an OSS version or in its hotfix is replaced. A long-term support version has no OSS milestone, and its line is the source. The commercial repository has a long-term support branch for it (`embargoed/lts/5.8.x`), which is how it is told from the milestone of a release that is not one.
 
 - **The previous train.** A release that is in another train leaves it before the rebuild joins the new one. The previous train is the one of the previous due date (`changes.due_on.from` of the event), and the one that a description named. A train that the release did not join is not left.
-- **A due date with no train** (no branch of that date in the release train repository yet) is kept. The milestones have no train line, the release leaves the train that it was in, and nothing is started. The hotfix keeps its due date, as it comes from the train. Once the train exists, the nightly run, or a run by hand with `all`, finds it.
+- **A due date with no train** (no branch of that date in the release train repository yet) is kept. The milestones have no train line, the release leaves the train that it was in, and nothing is started. The hotfix keeps its due date, as it comes from the train. Once the train exists, the nightly run, or a run by hand with no milestone, finds it.
 - **A train with no `schedule.publication.commercial-general-availability`** makes the hotfix say `ERROR: The Release Train 2026.11.19 has no commercial-general-availability`.
 - **A train that is ready** cannot be left: the description is `ERROR: Cannot leave the Release Train 2026.11.19: it is ready`, and nothing else changes.
 - **The due date is cleared:** the release leaves the train, and the line is taken out. Nothing is rebuilt.
@@ -49,15 +49,13 @@ So a field that was empty is **not** in `changes`, and `{}` is treated as no cha
 | Input | Required | What it is |
 |---|---|---|
 | `repository` | yes | `owner/repo` of the milestone that was edited, OSS or commercial. |
-| `milestone` | yes, unless `all` | Its title, `7.0.9`. |
-| `all` | no, `false` | `true` syncs every open milestone of the project that has a release (the OSS ones, with their commercial milestone and hotfix, and the commercial ones of long-term support). The milestone, `changes` and `sender` are not used. An OSS milestone with no due date and no `Release Train:` line is left out. |
+| `milestone` | no | Its title, `7.0.9`. Empty syncs every open milestone of the project that has a release (the OSS ones, with their commercial milestone and hotfix, and the commercial ones of long-term support), and then builds all the release branches again. An OSS milestone with no due date and no `Release Train:` line is left out. A run for a milestone with no `changes` (by hand) builds its releases again. |
 | `dry-run` | no, `false` | `true` writes nothing and runs nothing: the summary says what would be done, with the totals, and the outputs are the same. |
 | `changes` | no | The field `changes` of the event, as JSON: `{"due_on":{"from":"2026-11-19T00:00:00Z"}}`. Empty for a run by hand. |
 | `sender` | no | `github.event.sender.login`, for an edit. Empty for a run by hand. |
 | `project` | no | The project id in the train, the name of the OSS repository by default. |
 | `release-train-repository` | no | `spring-io/release-train` by default. |
-| `rebuild` | no, `false` | With `all`, also starts the release workflow on the embargoed branches (the frozen and the long-term support ones first, the active ones after), so each release is built again with the dependency updates of its train, and joins it. A release that is ready in its train, and the time of a code freeze, are skipped. A release with no train is built too, so that it is tested and its snapshot is published. |
-| `dispatch` | no, `true` | `false` runs nothing (no leave, no rebuild) and takes the releases as joined: it is for after the release joined, to write the lines. The release workflow does it. |
+| `dispatch` | no, `true` | `false` runs nothing (no leave, no rebuild, not even for all of them) and takes the releases as joined: it is for after the release joined, to write the lines. The release workflow does it. |
 | `token` | yes | See below. |
 
 ## Outputs
