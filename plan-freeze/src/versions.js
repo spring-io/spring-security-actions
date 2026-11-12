@@ -23,18 +23,16 @@ export function candidateOf(snapshotVersion) {
 /**
  * The next development version of a branch: the last segment plus one (7.0.5-SNAPSHOT gives
  * 7.0.6-SNAPSHOT). A .0 version is the exception: 7.2.0-SNAPSHOT is released as milestones
- * and release candidates first, and stays while the GA, the milestone 7.2.0 itself, does not
- * exist. Once it exists (open or closed), the next is 7.2.1-SNAPSHOT. The milestones of a
- * hotfix (7.2.0.1) and of the milestones and release candidates (7.2.0-RC1) are other titles,
- * so they do not count.
- *
- * `milestones` are the titles of the milestones of the repository.
+ * and release candidates first, and stays until the release that is made is the GA
+ * (7.2.0 itself). Then the next is 7.2.1-SNAPSHOT. It is decided by the release that is made
+ * (`releaseVersion`, see releaseVersionOf), and not by whether a milestone 7.2.0 exists: that
+ * one may be created early, while 7.2.0-RC1 is made, and the version must stay.
  */
-export function nextVersion(current, milestones) {
+export function nextVersion(current, releaseVersion) {
   const candidate = candidateOf(current);
   const [major, minor, patch] = candidate.split(".").map(Number);
   if (patch === 0) {
-    return milestones.includes(candidate)
+    return releaseVersion === candidate
       ? `${major}.${minor}.1${SNAPSHOT}`
       : current;
   }
@@ -68,9 +66,19 @@ export function releaseVersionOf(candidate, milestones) {
   if (!candidate.endsWith(".0")) {
     return candidate;
   }
+  return openReleasesOf(candidate, milestones)[0] ?? "";
+}
+
+/**
+ * The titles of the open milestones of a .0 version, in the order that they are released:
+ * the milestones and release candidates (7.2.0-M2, 7.2.0-RC1) and 7.2.0 itself, by due date
+ * (one with no due date is last), and for one day milestones, then release candidates, then
+ * the version. The first is the release that is made now (releaseVersionOf).
+ */
+export function openReleasesOf(candidate, milestones) {
   const pattern = new RegExp(`^${escapeRegExp(candidate)}(-(M|RC)\\d+)?$`);
   const dueOf = (m) => (m.due_on ? Date.parse(m.due_on) : Infinity);
-  const open = milestones
+  return milestones
     .filter((m) => m.state === "open" && pattern.test(m.title))
     .sort((a, b) => {
       const dueA = dueOf(a);
@@ -81,8 +89,8 @@ export function releaseVersionOf(candidate, milestones) {
       const [kindA, numberA] = releaseOrder(a.title, candidate);
       const [kindB, numberB] = releaseOrder(b.title, candidate);
       return kindA - kindB || numberA - numberB;
-    });
-  return open[0]?.title ?? "";
+    })
+    .map((m) => m.title);
 }
 
 /**

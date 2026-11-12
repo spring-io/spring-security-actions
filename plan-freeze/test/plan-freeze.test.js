@@ -167,6 +167,30 @@ describe("planFreeze", () => {
     });
   });
 
+  it("keeps a .0 version while the milestone of the GA exists already, if the release that is made is not the GA", async () => {
+    const oss = [
+      milestone("7.0.5"),
+      milestone("7.1.1"),
+      milestone("7.2.0-M2"),
+      milestone("7.2.0"),
+    ];
+    const plan = await setup({}, {}, { oss }).run();
+    expect(plan.oss.find((g) => g.generation === "main")).toMatchObject({
+      current: "7.2.0-SNAPSHOT",
+      next: "7.2.0-SNAPSHOT",
+      bump: false,
+    });
+  });
+
+  it("bumps a .0 version when the release that is made is the GA", async () => {
+    const oss = [milestone("7.0.5"), milestone("7.1.1"), milestone("7.2.0")];
+    const plan = await setup({}, {}, { oss }).run();
+    expect(plan.oss.find((g) => g.generation === "main")).toMatchObject({
+      next: "7.2.1-SNAPSHOT",
+      bump: true,
+    });
+  });
+
   it("says that the milestone of a hotfix does not exist", async () => {
     const plan = await setup(
       {},

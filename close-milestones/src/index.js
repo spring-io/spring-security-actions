@@ -8,12 +8,9 @@ export const DEFAULT_PLAN_FILE = "code-freeze/plan.json";
 export const DEFAULT_MILESTONES_FILE = "code-freeze/milestones.json";
 
 /**
- * Closes the milestone of one release, or deletes it. The milestone is read again, as issues
- * may have been moved in or out since the plan, and the counts of that read decide:
- *
- * - a hotfix with no issues at all, open or closed, is deleted: it has nothing to say,
- * - any other milestone is closed, with open issues too (the result says how many),
- *   and one that is closed already is left alone.
+ * Closes the milestone of one release. The milestone is read again, as issues may have been moved in or out since the plan. It is
+ * closed with open issues too (the result says how many), whether or not it has issues, and
+ * one that is closed already is left alone. A milestone is never deleted.
  */
 export async function closeMilestone({ release }, { octokit }) {
   const { milestone } = release;
@@ -34,17 +31,6 @@ export async function closeMilestone({ release }, { octokit }) {
     open: data.open_issues,
     closed: data.closed_issues,
   };
-  if (release.hotfix && data.open_issues + data.closed_issues === 0) {
-    await call(
-      `Deleting the milestone ${milestone.title} of ${milestone.repository}`,
-      octokit.rest.issues.deleteMilestone({
-        owner,
-        repo,
-        milestone_number: milestone.number,
-      }),
-    );
-    return { ...base, result: "deleted" };
-  }
   if (data.state === "closed") {
     return { ...base, result: "already-closed" };
   }

@@ -1,0 +1,123 @@
+name: sync-milestone
+
+# Keeps the milestones of a release in step with its release train. It runs when a milestone is
+# edited, in the OSS repository or in the commercial one, and what it does is in the action:
+#
+#   - The due date of the OSS milestone of a release (7.0.9) is the date of its release train
+#     (2026-11-19 is the train 2026.11.19). The release, release/7.0.9, and the hotfix, release/7.0.9.1,
+#     join it, but not here: the release workflow joins them, when it builds the branches against the
+#     train. The milestone of the hotfix is due on the commercial general availability of the train. The
+#     commercial milestone of the release follows the due date, and has the same line as the OSS
+#     milestone.
+#   - The commercial milestone of a long-term support version (5.8.30) names its train in its
+#     description, `Release Train: 2026.11.19`, and is due on the commercial general availability of it.
+#   - A release that was in another train leaves it first, and the release workflow is started on its
+#     embargoed branches to join the new one. A due date whose train does not exist (yet) is kept, with no
+#     line. A release branch that does not exist is not joined, which is not an error.
+#   - An edit of the commercial milestone of an OSS version, or of its hotfix, is put right from the
+#     OSS milestone.
+#
+# By hand, it can sync one milestone (and what follows it), or all of them (all), and the dry run only
+# says what it would do. With all it first makes and closes the milestones of the cycle from the versions
+# of the branches (the step of the code freeze), and then syncs the trains. Every night the caller runs it with all and rebuild: the milestones are synced,
+# and the release workflow is started on the embargoed branches (until the release is ready), so that
+# every branch is built again with the dependency updates that the train has, and tested. See
+# docs/milestones.md.
+#
+# An edit by the user of the token is the one of this workflow, and is left alone, unless the description
+# starts with ! (the owner of the token asking for a run: the ! is taken out, and it runs once).
+#
+# This is a reusable workflow, and it runs in the commercial repository, which has the release
+# branches and the token. The commercial repository calls it from a workflow on its default branch
+# (the event milestone only runs those), and the OSS repository calls that one when its milestones
+# are edited: see docs/milestones.md for both callers, and the secret.
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: "The repository (owner/repo) of the milestone that was edited: the OSS repository or the commercial one"
+        type: string
+        required: true
+      milestone:
+        description: "The title of the milestone that was edited, for example 7.0.9. Not needed with all"
+        type: string
+        required: false
+        default: ""
+      all:
+        description: "Sync every open milestone of the project that has a release, for a run by hand"
+        type: boolean
+        required: false
+        default: false
+      rebuild:
+        description: "With all, start the release workflow on the embargoed branches, so that each release is built again against its train and joins it (the nightly run)"
+        type: boolean
+        required: false
+        default: false
+      dry-run:
+        description: "Write nothing and run nothing: the summary says what would be done"
+        type: boolean
+        required: false
+        default: false
+      changes:
+        description: "What the edit changed, the field changes of the event (toJSON(github.event.changes)). Empty for a run by hand"
+        type: string
+        required: false
+        default: ""
+      sender:
+        description: "Who made the edit (github.event.sender.login), empty for a run by hand. An edit by the user of the token is left alone, unless its description starts with !"
+        type: string
+        required: false
+        default: ""
+      release-train-repository:
+        description: "The release train repository (owner/repo). A caller that passes an empty value, as a variable that is not set is, gets the default"
+        type: string
+        required: false
+        default: spring-io/release-train
+      runs-on:
+        description: "The runner of the job: a label, such as ubuntu22-2-8 for the runners of the organization. A caller that passes an empty value gets the default"
+        type: string
+        required: false
+        default: ubuntu-latest
+    secrets:
+      RELEASE_AUTOMATION_TOKEN:
+        description: "The token that writes the milestones of both repositories (Issues: Read and write), reads the release train repository (Contents: Read-only), and runs the workflow Release Train - Leave on the release branches and the release workflow on the embargoed branches (Actions: Read and write)"
+        required: true
+
+permissions:
+  contents: read
+
+# One edit after the other, in the order they were made: an edit that waited would be replaced by
+# the next one, and with it what it changed (the train that the release has to leave) would be lost.
+# A group belongs to the repository that calls this workflow. A caller must not have a group of the
+# same name: that cancels the caller.
+concurrency:
+  group: sync-milestone
+  queue: max
+
+jobs:
+  sync-milestone:
+    name: Sync the milestone
+    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
+    steps:
+      # By hand, with all: first the milestones of the cycle, from the version of gradle.properties as
+      # the branches are now, as the code freeze does after the bump (see docs/milestones.md).
+      - name: Make and close the milestones of the cycle
+        if: ${{ inputs.all }}
+        uses: spring-io/spring-security-actions/ensure-milestones@bd3cae229836f13ec484a981b94caf041e8cb4d9 # 0.0.27
+        with:
+          repository: ${{ inputs.repository }}
+          dry-run: ${{ inputs.dry-run }}
+          token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+      - name: Sync the milestone
+        uses: spring-io/spring-security-actions/sync-milestone@bd3cae229836f13ec484a981b94caf041e8cb4d9 # 0.0.27
+        with:
+          repository: ${{ inputs.repository }}
+          milestone: ${{ inputs.milestone }}
+          all: ${{ inputs.all }}
+          rebuild: ${{ inputs.rebuild }}
+          dry-run: ${{ inputs.dry-run }}
+          changes: ${{ inputs.changes }}
+          sender: ${{ inputs.sender }}
+          release-train-repository: ${{ inputs.release-train-repository || 'spring-io/release-train' }}
+          token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}

@@ -36670,18 +36670,16 @@ function candidateOf(snapshotVersion) {
 /**
  * The next development version of a branch: the last segment plus one (7.0.5-SNAPSHOT gives
  * 7.0.6-SNAPSHOT). A .0 version is the exception: 7.2.0-SNAPSHOT is released as milestones
- * and release candidates first, and stays while the GA, the milestone 7.2.0 itself, does not
- * exist. Once it exists (open or closed), the next is 7.2.1-SNAPSHOT. The milestones of a
- * hotfix (7.2.0.1) and of the milestones and release candidates (7.2.0-RC1) are other titles,
- * so they do not count.
- *
- * `milestones` are the titles of the milestones of the repository.
+ * and release candidates first, and stays until the release that is made is the GA
+ * (7.2.0 itself). Then the next is 7.2.1-SNAPSHOT. It is decided by the release that is made
+ * (`releaseVersion`, see releaseVersionOf), and not by whether a milestone 7.2.0 exists: that
+ * one may be created early, while 7.2.0-RC1 is made, and the version must stay.
  */
-function nextVersion(current, milestones) {
+function nextVersion(current, releaseVersion) {
   const candidate = candidateOf(current);
   const [major, minor, patch] = candidate.split(".").map(Number);
   if (patch === 0) {
-    return milestones.includes(candidate)
+    return releaseVersion === candidate
       ? `${major}.${minor}.1${SNAPSHOT}`
       : current;
   }
@@ -36715,9 +36713,19 @@ function releaseVersionOf(candidate, milestones) {
   if (!candidate.endsWith(".0")) {
     return candidate;
   }
+  return openReleasesOf(candidate, milestones)[0] ?? "";
+}
+
+/**
+ * The titles of the open milestones of a .0 version, in the order that they are released:
+ * the milestones and release candidates (7.2.0-M2, 7.2.0-RC1) and 7.2.0 itself, by due date
+ * (one with no due date is last), and for one day milestones, then release candidates, then
+ * the version. The first is the release that is made now (releaseVersionOf).
+ */
+function openReleasesOf(candidate, milestones) {
   const pattern = new RegExp(`^${escapeRegExp(candidate)}(-(M|RC)\\d+)?$`);
   const dueOf = (m) => (m.due_on ? Date.parse(m.due_on) : Infinity);
-  const open = milestones
+  return milestones
     .filter((m) => m.state === "open" && pattern.test(m.title))
     .sort((a, b) => {
       const dueA = dueOf(a);
@@ -36728,8 +36736,8 @@ function releaseVersionOf(candidate, milestones) {
       const [kindA, numberA] = releaseOrder(a.title, candidate);
       const [kindB, numberB] = releaseOrder(b.title, candidate);
       return kindA - kindB || numberA - numberB;
-    });
-  return open[0]?.title ?? "";
+    })
+    .map((m) => m.title);
 }
 
 /**
@@ -36926,9 +36934,8 @@ async function planFreeze(
   const releases = new Map();
   const ossMilestones = await readMilestones(ossRepository);
   const commercialMilestones = await readMilestones(hostRepository);
-  const titles = (milestones) => milestones.map((m) => m.title);
 
-  /** The milestone of a release, to be closed (or deleted) after the freeze: undefined if there is none. */
+  /** The milestone of a release, to be closed after the freeze: undefined if there is none. */
   const milestoneOf = (milestones, repository, title) => {
     const found = milestones.find((m) => m.title === title);
     return (
@@ -37000,7 +37007,8 @@ async function planFreeze(
       problems.push(`${branch}: ${error.message}`);
       continue;
     }
-    const next = nextVersion(current, titles(ossMilestones));
+    const releaseVersion = releaseVersionOf(candidate, ossMilestones);
+    const next = nextVersion(current, releaseVersion);
     oss.push({
       generation: branch,
       branch,
@@ -37011,7 +37019,6 @@ async function planFreeze(
       bump: next !== current,
     });
 
-    const releaseVersion = releaseVersionOf(candidate, ossMilestones);
     if (!releaseVersion) {
       problems.push(
         `${branch} (${current}) has no open milestone in ${ossRepository}, one of ${candidate}, ${candidate}-M<n> and ${candidate}-RC<n>, so there is no release to mark ready`,
@@ -37067,7 +37074,8 @@ async function planFreeze(
       problems.push(`${branch}: ${error.message}`);
       continue;
     }
-    const next = nextVersion(current, titles(commercialMilestones));
+    const releaseVersion = releaseVersionOf(candidate, commercialMilestones);
+    const next = nextVersion(current, releaseVersion);
     lts.push({
       generation,
       branch,
@@ -37075,7 +37083,6 @@ async function planFreeze(
       next,
       bump: next !== current,
     });
-    const releaseVersion = releaseVersionOf(candidate, commercialMilestones);
     if (!releaseVersion) {
       problems.push(
         `${branch} (${current}) has no open milestone in ${hostRepository}, one of ${candidate}, ${candidate}-M<n> and ${candidate}-RC<n>, so there is no release to mark ready`,

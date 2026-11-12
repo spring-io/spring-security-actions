@@ -28624,6 +28624,7 @@ var __webpack_exports__ = {};
 
 // EXPORTS
 __nccwpck_require__.d(__webpack_exports__, {
+  ht: () => (/* binding */ ensuredTable),
   iW: () => (/* binding */ main),
   Yf: () => (/* binding */ mergesTable),
   s0: () => (/* binding */ milestonesTable),
@@ -31681,7 +31682,7 @@ function versionsTable(plan, apply) {
   for (const g of plan.oss) {
     const commit = g.bump
       ? `Next Development Version (${g.next})${commitOf(apply, g.branch)}`
-      : `none: the version stays, as ${g.current.replace(/-SNAPSHOT$/, "")} has no GA milestone yet`;
+      : `none: the version stays until the GA, ${g.current.replace(/-SNAPSHOT$/, "")}, is the release that is made`;
     rows.push([g.branch, "OSS", g.current, g.next, commit]);
     rows.push([
       g.frozen,
@@ -31769,9 +31770,6 @@ const issues = (n) => `${n} open ${n === 1 ? "issue" : "issues"}`;
 /** What a dry run says about a milestone, from the plan: what the action would do with it. */
 const wouldBe = (release) => {
   const { milestone } = release;
-  if (release.hotfix && milestone.open + milestone.closed === 0) {
-    return "Would be deleted, it has no issues";
-  }
   if (milestone.state === "closed") {
     return "Already closed";
   }
@@ -31788,29 +31786,32 @@ const doneResult = (result) => {
       return `Closed with ${issues(result.open)}`;
     case "already-closed":
       return "Already closed";
-    case "deleted":
-      return "Deleted, it had no issues";
     default:
       return `Failed: ${result.error}`;
   }
 };
 
-/** The milestones of the releases that are closed (or deleted) after the pushes. */
+/**
+ * The milestones of the releases that are closed after the pushes.
+ */
 function milestonesTable(plan, milestones, dryRun) {
   const rows = plan.releases
     .filter((release) => release.milestone)
     .map((release) => {
       const { milestone } = release;
-      const done = milestones?.find((m) => m.version === release.version);
+      const done = milestones?.find(
+        (m) =>
+          m.version === release.version &&
+          m.repository === milestone.repository,
+      );
       const counts = done?.open !== undefined ? done : milestone;
-      const gone = done?.result === "deleted";
       const result = dryRun
         ? wouldBe(release)
         : done
           ? doneResult(done)
           : "Not closed, the freeze did not get to it";
       return [
-        gone || !milestone.url
+        !milestone.url
           ? release.version
           : `[${release.version}](${done?.url ?? milestone.url})`,
         milestone.repository,
@@ -31829,6 +31830,36 @@ function milestonesTable(plan, milestones, dryRun) {
     ],
     rows,
   );
+}
+
+const ENSURED = {
+  closed: ["Closed", "Would be closed"],
+  "already-closed": ["Closed already", "Closed already"],
+  absent: ["Not there", "Not there"],
+  created: ["Made", "Would be made"],
+  exists: ["There already", "There already"],
+  linked: ["Link added", "Link would be added"],
+  "linked-already": ["Has the link already", "Has the link already"],
+};
+
+/**
+ * The milestones of the cycle that the step ensure-milestones closed or made, from its file:
+ * the version of gradle.properties after the bump says which. A dry run says what it would do.
+ */
+function ensuredTable(ensured, dryRun) {
+  const rows = (ensured?.results ?? []).map((r) => [
+    r.url ? `[${r.title}](${r.url})` : r.title,
+    r.repository,
+    { close: "Close", make: "Make", link: "Link to the OSS milestone" }[
+      r.action
+    ],
+    r.result === "failed"
+      ? `Failed: ${r.error}`
+      : r.result === "skipped"
+        ? `Skipped: ${r.reason}`
+        : (ENSURED[r.result]?.[dryRun ? 1 : 0] ?? r.result),
+  ]);
+  return table(["Milestone", "Repository", "What", "Result"], rows);
 }
 
 function pushSection(push, dryRun) {
@@ -31856,6 +31887,7 @@ function render({
   ready,
   push,
   milestones,
+  ensured,
   dryRun,
   status,
 }) {
@@ -31896,7 +31928,13 @@ function render({
     plan.releases.some((release) => release.milestone)
   ) {
     parts.push(
-      `## Milestones closed\nEach release marked ready has its milestone closed once the pushes succeed. A milestone with open issues is closed all the same, and the count is shown. A hotfix milestone with no issues is deleted.\n\n${milestonesTable(plan, milestones, dryRun)}`,
+      `## Milestones closed\nEach release marked ready has its milestone closed once the pushes succeed. A milestone with open issues is closed all the same, and the count is shown. A milestone is closed whether or not it has issues, and none is deleted.\n\n${milestonesTable(plan, milestones, dryRun)}`,
+    );
+  }
+  if (plan.problems?.length === 0 && ensured) {
+    const warnings = ensured.warnings ?? [];
+    parts.push(
+      `## Milestones of the cycle\nThe version of gradle.properties after the bump decides them: the release before it is done, the commercial milestones that track the fixes of the active branch (the hotfix, and the next release) are closed, and the next OSS release and the two trackers of the new active branch are made, with the link to the OSS milestone on the one of the next release. One that is right already is left alone.\n\n${warnings.length > 0 ? `${warnings.map((w) => `- Warning: ${w}`).join("\n")}\n\n` : ""}${ensuredTable(ensured, dryRun)}`,
     );
   }
   return parts.join("\n\n");
@@ -31912,6 +31950,7 @@ async function main() {
     ready: read(file("ready-file", "ready.json")),
     push: read(file("push-file", "push.json")),
     milestones: read(file("milestones-file", "milestones.json")),
+    ensured: read(file("ensured-file", "milestones-ensured.json")),
     dryRun: getInput("dry-run") === "true",
     status: getInput("job-status"),
   });
@@ -31922,10 +31961,11 @@ if (isMain(import.meta.url)) {
   execute(main);
 }
 
+var __webpack_exports__ensuredTable = __webpack_exports__.ht;
 var __webpack_exports__main = __webpack_exports__.iW;
 var __webpack_exports__mergesTable = __webpack_exports__.Yf;
 var __webpack_exports__milestonesTable = __webpack_exports__.s0;
 var __webpack_exports__readyTable = __webpack_exports__.c5;
 var __webpack_exports__render = __webpack_exports__.XX;
 var __webpack_exports__versionsTable = __webpack_exports__.Ks;
-export { __webpack_exports__main as main, __webpack_exports__mergesTable as mergesTable, __webpack_exports__milestonesTable as milestonesTable, __webpack_exports__readyTable as readyTable, __webpack_exports__render as render, __webpack_exports__versionsTable as versionsTable };
+export { __webpack_exports__ensuredTable as ensuredTable, __webpack_exports__main as main, __webpack_exports__mergesTable as mergesTable, __webpack_exports__milestonesTable as milestonesTable, __webpack_exports__readyTable as readyTable, __webpack_exports__render as render, __webpack_exports__versionsTable as versionsTable };

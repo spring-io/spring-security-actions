@@ -1,0 +1,28 @@
+name: "ensure-milestones"
+description: "Makes the milestones of a project what its versions say they should be, and closes the ones that are done: the version of gradle.properties after a code freeze has bumped it decides which release is next, which milestones track the fixes of the active branch, and which are closed. It is the milestone step of the code freeze, and runs by hand to check a project"
+
+inputs:
+  repository:
+    description: "The repository (owner/repo) of the project, the OSS one or the commercial one (its name ends with -commercial). The other one is named from it."
+    required: true
+  plan-file:
+    description: "The plan of a code freeze (the output `plan-file` of `plan-freeze`). If it is given, the versions are the ones that the plan will bump the branches to, and the releases of the plan are taken as closed: for the dry run of a freeze, before anything is bumped. Without it, the versions are read from gradle.properties of the branches, as they are."
+    required: false
+  output-file:
+    description: "Where to write what was done to each milestone, as JSON. code-freeze/milestones-ensured.json in RUNNER_TEMP by default."
+    required: false
+  dry-run:
+    description: "`true` writes nothing: the summary says what would be done."
+    required: false
+    default: "false"
+  token:
+    description: "A token that may write the milestones of the OSS and of the commercial repository (Issues: Read and write), and read the commercial repository (Contents: Read-only)."
+    required: true
+
+outputs:
+  ensured-file:
+    description: "The file with the result for each milestone, as JSON: closed, already-closed, absent, created, exists, linked, linked-already, skipped or failed."
+
+runs:
+  using: "node24"
+  main: "dist/index.js"

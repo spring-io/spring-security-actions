@@ -181,9 +181,8 @@ export async function planFreeze(
   const releases = new Map();
   const ossMilestones = await readMilestones(ossRepository);
   const commercialMilestones = await readMilestones(hostRepository);
-  const titles = (milestones) => milestones.map((m) => m.title);
 
-  /** The milestone of a release, to be closed (or deleted) after the freeze: undefined if there is none. */
+  /** The milestone of a release, to be closed after the freeze: undefined if there is none. */
   const milestoneOf = (milestones, repository, title) => {
     const found = milestones.find((m) => m.title === title);
     return (
@@ -255,7 +254,8 @@ export async function planFreeze(
       problems.push(`${branch}: ${error.message}`);
       continue;
     }
-    const next = nextVersion(current, titles(ossMilestones));
+    const releaseVersion = releaseVersionOf(candidate, ossMilestones);
+    const next = nextVersion(current, releaseVersion);
     oss.push({
       generation: branch,
       branch,
@@ -266,7 +266,6 @@ export async function planFreeze(
       bump: next !== current,
     });
 
-    const releaseVersion = releaseVersionOf(candidate, ossMilestones);
     if (!releaseVersion) {
       problems.push(
         `${branch} (${current}) has no open milestone in ${ossRepository}, one of ${candidate}, ${candidate}-M<n> and ${candidate}-RC<n>, so there is no release to mark ready`,
@@ -322,7 +321,8 @@ export async function planFreeze(
       problems.push(`${branch}: ${error.message}`);
       continue;
     }
-    const next = nextVersion(current, titles(commercialMilestones));
+    const releaseVersion = releaseVersionOf(candidate, commercialMilestones);
+    const next = nextVersion(current, releaseVersion);
     lts.push({
       generation,
       branch,
@@ -330,7 +330,6 @@ export async function planFreeze(
       next,
       bump: next !== current,
     });
-    const releaseVersion = releaseVersionOf(candidate, commercialMilestones);
     if (!releaseVersion) {
       problems.push(
         `${branch} (${current}) has no open milestone in ${hostRepository}, one of ${candidate}, ${candidate}-M<n> and ${candidate}-RC<n>, so there is no release to mark ready`,

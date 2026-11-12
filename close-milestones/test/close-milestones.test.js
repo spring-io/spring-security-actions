@@ -93,7 +93,7 @@ describe("closeMilestone", () => {
     expect(octokit.closed).toEqual([]);
   });
 
-  it("does not delete a milestone with no issues if it is not of a hotfix", async () => {
+  it("does not delete a release milestone with no issues", async () => {
     const octokit = fakeOctokit({ [oss]: { 1: state(0, 0) } });
     expect(
       await closeMilestone({ release: release("7.0.5", oss, 1) }, { octokit }),
@@ -101,25 +101,19 @@ describe("closeMilestone", () => {
     expect(octokit.deleted).toEqual([]);
   });
 
-  it("deletes the milestone of a hotfix that has no issues at all", async () => {
+  it("closes the milestone of a hotfix that has no issues at all, and does not delete it", async () => {
     const octokit = fakeOctokit({ [commercial]: { 3: state(0, 0) } });
     expect(
       await closeMilestone(
         { release: release("7.0.5.1", commercial, 3, true) },
         { octokit },
       ),
-    ).toMatchObject({ result: "deleted", open: 0, closed: 0 });
-    expect(octokit.deleted).toEqual([
-      {
-        owner: "spring-projects",
-        repo: "spring-security-commercial",
-        milestone_number: 3,
-      },
-    ]);
-    expect(octokit.closed).toEqual([]);
+    ).toMatchObject({ result: "closed", open: 0, closed: 0 });
+    expect(octokit.closed).toHaveLength(1);
+    expect(octokit.deleted).toEqual([]);
   });
 
-  it("deletes the empty milestone of a hotfix that is closed, too", async () => {
+  it("leaves the empty milestone of a hotfix that is closed already", async () => {
     const octokit = fakeOctokit({
       [commercial]: { 3: state(0, 0, "closed") },
     });
@@ -128,7 +122,9 @@ describe("closeMilestone", () => {
         { release: release("7.0.5.1", commercial, 3, true) },
         { octokit },
       ),
-    ).toMatchObject({ result: "deleted" });
+    ).toMatchObject({ result: "already-closed" });
+    expect(octokit.closed).toEqual([]);
+    expect(octokit.deleted).toEqual([]);
   });
 
   it.each([
@@ -148,13 +144,13 @@ describe("closeMilestone", () => {
     },
   );
 
-  it("decides on the issues it reads now, and not on the ones of the plan", async () => {
+  it("says the issues it reads now, and not the ones of the plan", async () => {
     // the plan saw none, and an issue was moved in since
     const octokit = fakeOctokit({ [commercial]: { 3: state(0, 1) } });
     const entry = release("7.0.5.1", commercial, 3, true);
     Object.assign(entry.milestone, { open: 0, closed: 0 });
     expect(await closeMilestone({ release: entry }, { octokit })).toMatchObject(
-      { result: "closed" },
+      { result: "closed", open: 0, closed: 1 },
     );
     expect(octokit.deleted).toEqual([]);
   });
@@ -179,7 +175,7 @@ describe("closeMilestones", () => {
     );
     expect(results.map((r) => [r.version, r.result])).toEqual([
       ["7.0.5", "closed"],
-      ["7.0.5.1", "deleted"],
+      ["7.0.5.1", "closed"],
       ["6.5.11", "closed"],
     ]);
   });

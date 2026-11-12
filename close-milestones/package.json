@@ -2,7 +2,7 @@
   "name": "close-milestones",
   "version": "0.0.1",
   "private": true,
-  "description": "Closes the milestones of the releases of a code freeze, and deletes the empty ones of hotfixes",
+  "description": "Closes the milestones of the releases of a code freeze",
   "type": "module",
   "engines": {
     "node": ">=24"

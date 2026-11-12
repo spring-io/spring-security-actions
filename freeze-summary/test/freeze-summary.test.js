@@ -123,7 +123,7 @@ describe("render", () => {
       "| embargoed/frozen/7.0.x | commercial | 7.0.5-SNAPSHOT | 7.0.6-SNAPSHOT | arrives by the merge of 7.0.x (no commit of its own) |",
     );
     expect(markdown).toContain(
-      "| main | OSS | 7.2.0-SNAPSHOT | 7.2.0-SNAPSHOT | none: the version stays, as 7.2.0 has no GA milestone yet |",
+      "| main | OSS | 7.2.0-SNAPSHOT | 7.2.0-SNAPSHOT | none: the version stays until the GA, 7.2.0, is the release that is made |",
     );
     expect(markdown).toContain(
       "| release/7.0.5 | 7.0.x, embargoed/frozen/7.0.x | Not run, this is a dry run |",
@@ -152,27 +152,39 @@ describe("render", () => {
         "| [7.0.5](https://github.com/spring-projects/spring-security/milestone/312) | spring-projects/spring-security | 7.0.x, embargoed/frozen/7.0.x | 2 / 17 | Would be closed with 2 open issues |",
       );
       expect(markdown).toContain(
-        `| [7.0.5.1](https://github.com/${commercial}/milestone/41) | ${commercial} | embargoed/active/7.0.x (a hotfix) | 0 / 0 | Would be deleted, it has no issues |`,
+        `| [7.0.5.1](https://github.com/${commercial}/milestone/41) | ${commercial} | embargoed/active/7.0.x (a hotfix) | 0 / 0 | Would be closed |`,
       );
       expect(markdown).toContain("| 0 / 6 | Already closed |");
     });
 
-    it("says what was done, and links none that was deleted", () => {
+    it("says what was done", () => {
       const milestones = [
         {
           version: "7.0.5",
+          repository: "spring-projects/spring-security",
           result: "closed-with-open",
           open: 1,
           closed: 18,
           url: "https://github.com/spring-projects/spring-security/milestone/312",
         },
-        { version: "7.0.5.1", result: "deleted", open: 0, closed: 0 },
-        { version: "6.5.11", result: "failed", error: "403 Forbidden" },
+        {
+          version: "7.0.5.1",
+          repository: commercial,
+          result: "closed",
+          open: 0,
+          closed: 0,
+        },
+        {
+          version: "6.5.11",
+          repository: commercial,
+          result: "failed",
+          error: "403 Forbidden",
+        },
       ];
       const markdown = render({ plan, apply, milestones, dryRun: false });
       expect(markdown).toContain("| 1 / 18 | Closed with 1 open issue |");
       expect(markdown).toContain(
-        `| 7.0.5.1 | ${commercial} | embargoed/active/7.0.x (a hotfix) | 0 / 0 | Deleted, it had no issues |`,
+        `| [7.0.5.1](https://github.com/${commercial}/milestone/41) | ${commercial} | embargoed/active/7.0.x (a hotfix) | 0 / 0 | Closed |`,
       );
       expect(markdown).toContain("| 0 / 6 | Failed: 403 Forbidden |");
     });
@@ -186,6 +198,90 @@ describe("render", () => {
       });
       expect(markdown).toContain(
         "| Not closed, the freeze did not get to it |",
+      );
+    });
+  });
+
+  describe("the milestones of the cycle", () => {
+    const oss = "spring-projects/spring-security";
+    const commercial = "spring-projects/spring-security-commercial";
+    const ensured = {
+      warnings: ["no open milestone for 7.2.0 after 7.2.0-RC1"],
+      results: [
+        {
+          action: "close",
+          repository: commercial,
+          title: "7.0.6",
+          result: "closed",
+          url: `https://github.com/${commercial}/milestone/50`,
+        },
+        { action: "make", repository: oss, title: "7.0.6", result: "created" },
+        {
+          action: "make",
+          repository: commercial,
+          title: "7.0.7",
+          result: "exists",
+        },
+        {
+          action: "link",
+          repository: commercial,
+          title: "7.0.6",
+          result: "linked",
+        },
+      ],
+    };
+
+    it("says what a dry run would do, from the file of the step", () => {
+      const markdown = render({ plan, apply, ensured, dryRun: true });
+      expect(markdown).toContain("## Milestones of the cycle");
+      expect(markdown).toContain(
+        "- Warning: no open milestone for 7.2.0 after 7.2.0-RC1",
+      );
+      expect(markdown).toContain(
+        `| [7.0.6](https://github.com/${commercial}/milestone/50) | ${commercial} | Close | Would be closed |`,
+      );
+      expect(markdown).toContain(`| 7.0.6 | ${oss} | Make | Would be made |`);
+      expect(markdown).toContain(
+        `| 7.0.7 | ${commercial} | Make | There already |`,
+      );
+      expect(markdown).toContain(
+        `| 7.0.6 | ${commercial} | Link to the OSS milestone | Link would be added |`,
+      );
+    });
+
+    it("says what was done, and why one was skipped or failed", () => {
+      const markdown = render({
+        plan,
+        apply,
+        ensured: {
+          results: [
+            ...ensured.results.slice(0, 2),
+            {
+              action: "make",
+              repository: commercial,
+              title: "7.0.7",
+              result: "failed",
+              error: "403 Forbidden",
+            },
+            {
+              action: "link",
+              repository: commercial,
+              title: "7.0.6",
+              result: "skipped",
+              reason: `${commercial} has no milestone 7.0.6`,
+            },
+          ],
+        },
+        dryRun: false,
+      });
+      expect(markdown).toContain(`| 7.0.6 | ${oss} | Make | Made |`);
+      expect(markdown).toContain("Failed: 403 Forbidden");
+      expect(markdown).toContain("Skipped: ");
+    });
+
+    it("has no section if the step did not run", () => {
+      expect(render({ plan, apply, dryRun: true })).not.toContain(
+        "Milestones of the cycle",
       );
     });
   });

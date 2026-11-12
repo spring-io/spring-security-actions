@@ -15,6 +15,7 @@ updates:
       - /deploy-artifacts
       - /ensure-artifacts
       - /ensure-dependency-issues
+      - /ensure-milestones
       - /git-identity
       - /load-train
       - /map-train-versions
@@ -28,6 +29,7 @@ updates:
       - /run-gradle
       - /set-version
       - /start-branch
+      - /sync-milestone
       - /test
       - /update-versions
     schedule:
@@ -49,6 +51,7 @@ updates:
       - /copy-milestone-issues
       - /delete-branches
       - /ensure-dependency-issues
+      - /ensure-milestones
       - /freeze-summary
       - /git-identity
       - /list-branches
@@ -66,6 +69,7 @@ updates:
       - /ready-train
       - /set-version
       - /start-branch
+      - /sync-milestone
       - /update-versions
     schedule:
       interval: weekly

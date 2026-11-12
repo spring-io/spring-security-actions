@@ -17,12 +17,12 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 | [`check-not-ready`](check-not-ready/README.md) | Fails if the release train has the release as ready already. |
 | [`check-oss-support`](check-oss-support/README.md) | Fails if the OSS support of the generation of a version ends before a date, from the Spring projects API. |
 | [`compare-branches`](compare-branches/README.md) | Whether a branch has changes that another branch lacks: a hotfix is only built for an active embargoed branch that differs from the frozen one. |
-| [`close-milestones`](close-milestones/README.md) | Closes the milestone of each release of a code freeze, and deletes the milestone of a hotfix that has no issues. |
+| [`close-milestones`](close-milestones/README.md) | Closes the milestone of each release of a code freeze, and of the trackers of the fixes of the active branch. It never deletes one. |
 | [`compute-release-version`](compute-release-version/README.md) | The release version of a snapshot version, and its due date, from the milestones of a repository. |
 | [`compute-tag-versions`](compute-tag-versions/README.md) | The release version and the snapshot version of a tag. |
 | [`copy-milestone-issues`](copy-milestone-issues/README.md) | Copies the issues and the pull requests of a milestone to another repository, as issues, and comments on each original with the link to its copy. |
 | [`delete-branches`](delete-branches/README.md) | Deletes branches of a repository, all at once or none (`git push --atomic --delete`). |
-| [`ensure-cve-issues`](ensure-cve-issues/README.md) | A closed issue for every CVE fix of a push, in the milestone of its release. It makes the ones that are missing. |
+| [`ensure-cve-issues`](ensure-cve-issues/README.md) | A closed issue for every CVE fix of a push, in the milestones that it ships in (the hotfix and the next release). It makes the ones that are missing. |
 | [`ensure-dependency-issues`](ensure-dependency-issues/README.md) | An issue for every dependency update, in a milestone. It makes the ones that are missing. |
 | [`ensure-milestone`](ensure-milestone/README.md) | Creates a milestone in a repository if it has none of that title, with no due date. |
 | [`export-merges`](export-merges/README.md) | Exports the branches that `merge-tag` made, in a clone of their own with a README, to look at in a dry run (it has no remote and no command that pushes). |
@@ -35,6 +35,7 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 | [`merge-release`](merge-release/README.md) | Merges the release into the branch of its hotfix. |
 | [`merge-tag`](merge-tag/README.md) | Merges the tag of a release that was made public into its branch and forward through the newer branches, locally, keeping the versions of every branch. |
 | [`name-repositories`](name-repositories/README.md) | The project and its OSS repository, from the commercial repository. |
+| [`ensure-milestones`](ensure-milestones/README.md) | Makes and closes the milestones of a project from the version of `gradle.properties` after a code freeze has bumped it (the release before is done, the next release and the trackers of the fixes of the active branch are made), with a dry run. |
 | [`plan-freeze`](plan-freeze/README.md) | Plans a code freeze: the next versions, the releases to mark ready, and everything that stops it. |
 | [`plan-post-publish`](plan-post-publish/README.md) | Plans what happens after a release is made public: its kind, whether its issues are copied, the merges of its tag (or, in a dry run before the tag exists, of a ref that stands in for it) and the branches to delete. |
 | [`plan-release-branches`](plan-release-branches/README.md) | What the push of an embargoed branch builds. |
@@ -44,6 +45,7 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 | [`ready-train`](ready-train/README.md) | Runs the workflow Release Train - Ready of the project on each release branch of a code freeze, and waits for it. |
 | [`set-version`](set-version/README.md) | Sets the version of `gradle.properties`, in a commit of its own. |
 | [`start-branch`](start-branch/README.md) | Starts (or resets) a branch at a commit or a branch. |
+| [`sync-milestone`](sync-milestone/README.md) | Keeps the milestones of a release in step with its release train: joins and leaves the train when a due date or a `Release Train:` line changes. |
 | [`update-versions`](update-versions/README.md) | Changes the versions of a version catalog, with one commit for each. |
 
 ## The workflows of the release automation
@@ -52,9 +54,11 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 
 [`post-publish.yml`](.github/workflows/post-publish.yml) is a reusable workflow for what follows once a release is public: it copies the issues of its milestone to OSS, merges its tag forward, and deletes the branches that were built for the release. It is run when the tag is pushed, or by hand, with a dry run (which can be made before the tag exists, with a ref in its place, and which attaches the merged branches to the run). [docs/post-publish.md](docs/post-publish.md) is the guide: the callers, the token, and what to do when it fails.
 
-[`ensure-cve-issues.yml`](.github/workflows/ensure-cve-issues.yml) is a reusable workflow for a push to an active branch: it makes a closed issue for every `Fixes CVE-ID` that the push has, in the milestone of the release. [docs/cve-issues.md](docs/cve-issues.md) is the guide, with the caller.
+[`ensure-cve-issues.yml`](.github/workflows/ensure-cve-issues.yml) is a reusable workflow for a push to an active branch: it makes a closed issue for every `Fixes CVE-ID` that the push has, in the milestones that it ships in (the hotfix and the next release). [docs/cve-issues.md](docs/cve-issues.md) is the guide, with the caller.
 
 [`code-freeze.yml`](.github/workflows/code-freeze.yml) is a reusable workflow for the code freeze of a project: it moves every branch to its next development version, merges forward, marks the releases ready and pushes, with a dry run that is on by default. [docs/code-freeze.md](docs/code-freeze.md) is the guide, with the caller, the stub that the default branch of the commercial repository needs, and the guarantee that nothing commercial reaches OSS.
+
+[`sync-milestone.yml`](.github/workflows/sync-milestone.yml) is a reusable workflow that runs when a milestone is edited, in the OSS repository or in the commercial one: the release joins the release train of the due date of its milestone (and leaves the one it was in), and the milestones of the commercial repository follow. [docs/milestones.md](docs/milestones.md) is the guide, with the two callers.
 
 ## Working on an action
 

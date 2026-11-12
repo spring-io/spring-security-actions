@@ -1,5 +1,5 @@
 name: "freeze-summary"
-description: "Writes the summary of a code freeze: the versions, the releases marked ready, the merges, the pushes and the milestones"
+description: "Writes the summary of a code freeze: the versions, the releases marked ready, the merges, the pushes and the milestones, closed and made"
 
 inputs:
   dry-run:
@@ -22,7 +22,10 @@ inputs:
     description: "What was pushed. code-freeze/push.json in RUNNER_TEMP by default."
     required: false
   milestones-file:
-    description: "What was done to the milestones. code-freeze/milestones.json in RUNNER_TEMP by default."
+    description: "What was done to the milestones that were closed. code-freeze/milestones.json in RUNNER_TEMP by default."
+    required: false
+  ensured-file:
+    description: "What ensure-milestones did to the milestones of the cycle (or would do, in a dry run). code-freeze/milestones-ensured.json in RUNNER_TEMP by default."
     required: false
 
 runs:

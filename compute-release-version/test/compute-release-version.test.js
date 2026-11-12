@@ -764,25 +764,25 @@ describe("create-missing", () => {
   });
 
   it.each(["frozen", "lts"])(
-    "creates the milestone with a title only, and finds nothing to build (%s)",
+    "creates the milestone with a title only, and goes on with it, with no due date and no train (%s)",
     async (kind) => {
       const result = await run(
         {
           snapshotVersion: "7.0.9-SNAPSHOT",
           milestoneRepository: REPO,
           createMissing: true,
+          requireDueDate: false,
           kind,
         },
         { octokit: octokit() },
       );
       expect(result).toMatchObject({
-        found: false,
+        found: true,
         created: true,
-        notice: "Milestone created",
+        releaseVersion: "7.0.9",
+        dueDate: "",
+        releaseTrain: "",
       });
-      expect(result.message).toContain(
-        `Created the milestone 7.0.9 in ${REPO}`,
-      );
       expect(fake.created).toMatchObject([
         { repository: REPO, title: "7.0.9", due_on: null, description: null },
       ]);
@@ -817,6 +817,7 @@ describe("create-missing", () => {
         snapshotVersion: "7.7.0-SNAPSHOT",
         milestoneRepository: REPO,
         createMissing: true,
+        requireDueDate: false,
       },
       { octokit: octokit() },
     );
@@ -871,11 +872,11 @@ describe("createdMilestoneSummary", () => {
       [
         "### 7.0.1 is not in a release train yet",
         "",
-        "The milestone [7.0.1](https://github.com/acme/w/milestone/9) was created in acme/w, with no due date, so nothing was built.",
+        "The milestone [7.0.1](https://github.com/acme/w/milestone/9) was created in acme/w, with no due date, so its branches are built without a release train: no dependency updates, and nothing joins.",
         "",
-        "To add it to a release train:",
+        "To add it to a release train, once the train exists:",
         "1. [Set its due date](https://github.com/acme/w/milestone/9/edit) to the date of a release train (for example 2026-11-19).",
-        "2. Run the workflow again.",
+        "2. Run the workflow again on the embargoed branch (the nightly run does it): it builds the branches against the train, and joins it.",
         "",
       ].join("\n"),
     );
@@ -888,7 +889,9 @@ describe("createdMilestoneSummary", () => {
       milestone,
       kind: "lts",
     });
-    expect(summary).toContain("with no release train, so nothing was built");
+    expect(summary).toContain(
+      "with no release train, so its branches are built without a release train",
+    );
     expect(summary).toContain("`Release Train: 2026.11.19`");
     expect(summary).not.toContain("Set its due date");
   });
