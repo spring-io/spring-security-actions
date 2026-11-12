@@ -36,10 +36,10 @@ runs:
   steps:
     - id: version
       name: Extract Project Version
-      uses: spring-io/spring-release-actions/compute-version@3f7412aeec60ad13127b2a536a1b19a2803a5b81  # 0.0.8
+      uses: spring-io/spring-release-actions/compute-version@967a8de4659c4273a82bcb098d73c2330c015254  # 0.0.9
     - id: release-channel
       name: Establish Release Channel
-      uses: spring-io/spring-release-actions/compute-release-channel@3f7412aeec60ad13127b2a536a1b19a2803a5b81  # 0.0.8
+      uses: spring-io/spring-release-actions/compute-release-channel@967a8de4659c4273a82bcb098d73c2330c015254  # 0.0.9
       with:
         version: ${{ steps.version.outputs.version }}
     - id: secret-names

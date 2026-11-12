@@ -95,13 +95,13 @@ jobs:
       # the branches are now, as the code freeze does after the bump (see docs/milestones.md).
       - name: Make and close the milestones of the cycle
         if: ${{ inputs.milestone == '' }}
-        uses: spring-io/spring-security-actions/ensure-milestones@d2a951ec91fe56d9fedd1db1e6a313e6ab8214f4 # 0.0.30
+        uses: spring-io/spring-security-actions/ensure-milestones@6db8b46da5f035edd4587df6c704cf502d3851b9 # 0.0.31
         with:
           repository: ${{ inputs.repository }}
           dry-run: ${{ inputs.dry-run }}
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Sync the milestone
-        uses: spring-io/spring-security-actions/sync-milestone@d2a951ec91fe56d9fedd1db1e6a313e6ab8214f4 # 0.0.30
+        uses: spring-io/spring-security-actions/sync-milestone@6db8b46da5f035edd4587df6c704cf502d3851b9 # 0.0.31
         with:
           repository: ${{ inputs.repository }}
           milestone: ${{ inputs.milestone }}
