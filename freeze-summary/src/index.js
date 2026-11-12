@@ -81,6 +81,17 @@ const readyCell = ({ release, ready, dryRun }) => {
   return `[Failed: ${result.conclusion}](${result.runUrl})`;
 };
 
+/**
+ * The check that every release of the project that joined the train is made ready by the freeze:
+ * the plan stops for one that is left out, so a plan without problems has covered them all.
+ */
+export function joinedCheck(plan) {
+  const joined = plan.joined ?? [];
+  const ready = plan.releases.filter((r) => r.alreadyReady).length;
+  const subject = `${joined.length === 1 ? "The release" : `All ${joined.length} releases`} of ${plan.project} that joined the release train ${plan.train}`;
+  return `${subject} ${joined.length === 1 ? "is" : "are"} marked ready by this freeze${ready > 0 ? ` (${ready} ready already)` : ""}. Nothing is left joined and not ready.`;
+}
+
 /** The releases that are marked ready, each once, with the branches that it is the release of. */
 export function readyTable(plan, ready, dryRun) {
   return table(
@@ -257,7 +268,7 @@ export function render({
   }
   if (plan.problems?.length === 0 && plan.releases.length > 0) {
     parts.push(
-      `## Releases marked ready in the release train ${plan.train}\nEach release branch is marked ready once, before any bump is pushed, by running release-train-ready.yml on that branch.\n\n${readyTable(plan, ready, dryRun)}`,
+      `## Releases marked ready in the release train ${plan.train}\nEach release branch is marked ready once, before any bump is pushed, by running release-train-ready.yml on that branch.\n\n${joinedCheck(plan)}\n\n${readyTable(plan, ready, dryRun)}`,
     );
   }
   if (apply) {

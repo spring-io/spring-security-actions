@@ -5,7 +5,7 @@ Writes the summary of a code freeze, from the files that the other actions wrote
 ## What it shows
 
 - **Versions:** each branch, its repository, the version it has, the one it is bumped to, and the commit (an embargoed branch gets the version by the merge of the OSS branch, and has no commit of its own).
-- **Releases marked ready:** each release branch once, with the branches that it is the release of, and a link to the run of `release-train-ready.yml` and its result. A dry run says `Not run, this is a dry run`, and a release that was ready already says `Ready already, skipped`.
+- **Releases marked ready:** a line that says every release that joined the train is marked ready (the plan stops for one that is not, so a summary of a plan without problems has it), and each release branch once, with the branches that it is the release of, and a link to the run of `release-train-ready.yml` and its result. A dry run says `Not run, this is a dry run`, and a release that was ready already says `Ready already, skipped`.
 - **Merges** in order, with the version that each one keeps (across: the target's, down: the source's), and the rotation.
 - **Push:** what would be or was pushed, and the OSS leak check.
 - **Milestones closed:** the milestone of each release, with its open and closed issues and what was done: `Closed`, `Closed with 2 open issues`, or `Already closed`. A dry run says `Would be closed...`, and a run that did not get to it says `Not closed, the freeze did not get to it`.
