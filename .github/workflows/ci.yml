@@ -87,6 +87,28 @@ jobs:
     steps:
       - name: Check out the commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+      # An action whose action.yml was never added is invisible to the check of every action.yml
+      # below, and a workflow that pins a commit without it fails only when it runs.
+      - name: Check that every action has an action.yml, and that every pin has it
+        run: |
+          status=0
+          for file in */package.json; do
+            dir=$(dirname "$file")
+            if [ ! -f "$dir/action.yml" ]; then
+              echo "::error file=$file::$dir has a package.json and no action.yml"
+              status=1
+            fi
+          done
+          while read -r workflow dir sha; do
+            if ! git cat-file -e "$sha:$dir/action.yml" 2> /dev/null; then
+              echo "::error file=$workflow::$workflow pins $dir at $sha, which has no $dir/action.yml"
+              status=1
+            fi
+          done < <(grep -HoE 'uses: spring-io/spring-security-actions/[a-z-]+@[0-9a-f]{40}' .github/workflows/*.yml \
+            | sed -E 's#^([^:]+):uses: spring-io/spring-security-actions/([a-z-]+)@([0-9a-f]{40})$#\1 \2 \3#' | sort -u)
+          exit "$status"
       - name: Install actionlint
         run: |
           archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
