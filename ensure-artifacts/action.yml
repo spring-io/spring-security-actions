@@ -46,7 +46,7 @@ runs:
       name: Check if Artifact Already Deployed
       if: ${{ !endsWith(inputs.version, '-SNAPSHOT') }}
       continue-on-error: true
-      uses: spring-io/spring-release-actions/check-maven-artifact@3f7412aeec60ad13127b2a536a1b19a2803a5b81  # 0.0.8
+      uses: spring-io/spring-release-actions/check-maven-artifact@967a8de4659c4273a82bcb098d73c2330c015254  # 0.0.9
       with:
         repository-url: ${{ inputs.repository-uri }}/${{ inputs.repository-name }}
         artifact-path: ${{ inputs.artifact-path }}
