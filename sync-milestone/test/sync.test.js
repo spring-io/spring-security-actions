@@ -109,7 +109,11 @@ describe("an OSS milestone with a due date", () => {
     expect(mirror.due_on).toBe("2026-11-19T12:00:00Z");
     expect(fix.due_on).toBe("2026-12-24T12:00:00Z");
     expect(fix.description).toBe("");
-    expect(github.dispatches).toEqual([]);
+    // a run by hand builds the release again: the dependencies of its train may have changed
+    expect(dispatched(github)).toEqual([
+      `rebuild ${FROZEN}`,
+      `rebuild ${ACTIVE}`,
+    ]);
   });
 
   it("starts the release workflow when the due date was set, so that the release joins", async () => {
@@ -148,6 +152,29 @@ describe("an OSS milestone with a due date", () => {
   it("leaves a hotfix alone if its milestone does not exist", async () => {
     const { github, sync } = world({ hotfix: false, trains: joinedBoth });
     await sync({});
+    expect(dispatched(github)).toEqual([`rebuild ${FROZEN}`]);
+  });
+
+  it("says why it builds a release again: the train changed, or a person asked", async () => {
+    const changed = world();
+    const { actions: byEdit } = await changed.sync({
+      changes: { due_on: { from: "" } },
+      dryRun: true,
+    });
+    expect(byEdit.join("\n")).toContain(
+      `${FROZEN} (7.0.9): would be rebuilt (train changed)`,
+    );
+    const asked = world();
+    const { actions: byHand } = await asked.sync({ dryRun: true });
+    expect(byHand.join("\n")).toContain(
+      `${FROZEN} (7.0.9): would be rebuilt (requested)`,
+    );
+    expect(asked.github.dispatches).toEqual([]);
+  });
+
+  it("builds nothing again for an edit that did not change the train", async () => {
+    const { github, sync } = world({ trains: joinedBoth });
+    await sync({ changes: { description: { from: "Old notes" } } });
     expect(github.dispatches).toEqual([]);
   });
 

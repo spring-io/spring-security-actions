@@ -48,7 +48,7 @@ It never leaves a train that the release did not join, it never joins a train it
 
 Two errors are written into a description. Two things are **not** errors:
 
-- **A due date whose train does not exist (yet)** is kept. The milestones have no train line, the release leaves the train it was in, and nothing is rebuilt until the train exists. The nightly run, or a run by hand with `all`, finds the train later.
+- **A due date whose train does not exist (yet)** is kept. The milestones have no train line, the release leaves the train it was in, and nothing is rebuilt until the train exists. The nightly run, or a run by hand with no milestone, finds the train later.
 - **A release branch that does not exist.** Not building a branch means not joining it, on purpose: a hotfix with nothing to build has none. Nothing is written, and the release workflow ends with "Nothing to build", which is a success.
 
 | The description | What happened | What to do |
@@ -61,86 +61,108 @@ The release workflow ([release-branches](release-branches.md)) runs the same act
 ## Setup
 
 1. **The reusable workflow** is this repository's `sync-milestone.yml`. It runs in the commercial repository.
-2. **The caller in the commercial repository**, on its **default branch** (`main`): GitHub runs the event `milestone` only from there. It runs for an edit of a commercial milestone, and by hand.
+2. **The callers in the commercial repository**, on its **default branch** (`main`): GitHub runs the event `milestone` and the schedule only from there. `sync-milestone.yml` runs for an edit of a commercial milestone, every night, and by hand. `sync-milestone-oss.yml` runs for the OSS caller.
 3. **The caller in the OSS repository**, on its default branch: it runs for an edit of an OSS milestone, and runs the caller of the commercial repository.
 4. **The secret `RELEASE_AUTOMATION_TOKEN`** in both repositories (the one of the other workflows), and the permissions below. An edit by the user of the token is the handler's own, and is ignored, so that it does not run itself again. The owner of the token can still ask for a run: see [Setting a date as the owner of the token](#setting-a-date-as-the-owner-of-the-token).
 
-### The caller of the commercial repository
+### The callers of the commercial repository
+
+Two files on the default branch, both calling the same reusable workflow (it has one concurrency group, so their runs queue one after the other). The first is for people and the clock, and its form has two inputs. The second is only for the caller of the OSS repository, so that its plumbing is not in that form.
+
+`sync-milestone.yml`: the schedule, an edit of a commercial milestone, and a run by hand.
 
 ```yaml
 name: sync-milestone
 on:
   # every night: sync all the milestones, and build the release branches again
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 8 * * *"
   milestone:
     types: [edited]
   workflow_dispatch:
     inputs:
-      repository:
-        description: "The repository of the milestone (the OSS one, or this one)"
-        required: false
       milestone:
-        description: "The title of the milestone, 7.0.9 (not needed with all)"
+        description: "The title of the milestone, 7.0.9. Empty is all of them, and builds all the release branches again"
         required: false
-      all:
-        description: "Sync every open milestone of the project that has a release"
-        type: boolean
-        default: false
-      rebuild:
-        description: "With all, also build the release branches again (what the nightly run does)"
-        type: boolean
-        default: false
       dry-run:
         description: "Only say what would be done"
         type: boolean
         default: true
-      changes:
-        description: "The changes of the event, as JSON (the OSS caller gives them)"
-        required: false
-      sender:
-        description: "Who made the edit (the OSS caller gives it)"
-        required: false
 permissions:
   contents: read
 jobs:
   sync-milestone:
     uses: spring-io/spring-security-actions/.github/workflows/sync-milestone.yml@<tag>
     with:
-      repository: ${{ inputs.repository || github.repository }}
+      repository: ${{ github.repository }}
       milestone: ${{ inputs.milestone || github.event.milestone.title }}
-      all: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.all) }}
-      rebuild: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.rebuild) }}
       dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
-      changes: ${{ inputs.changes || toJSON(github.event.changes) }}
-      sender: ${{ inputs.sender || (github.event_name == 'milestone' && github.event.sender.login) || '' }}
+      changes: ${{ toJSON(github.event.changes) }}
+      sender: ${{ (github.event_name == 'milestone' && github.event.sender.login) || '' }}
       release-train-repository: ${{ vars.RELEASE_TRAIN_REPOSITORY }}
       runs-on: ${{ vars.UBUNTU_RUNS_ON }}
     secrets:
       RELEASE_AUTOMATION_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
 ```
 
-A run by hand with only `milestone` (and `repository` for an OSS milestone) syncs the milestones as they are: the train that the release has to leave is found from the description, as the previous due date is not known. It has no sender, so it always runs, whoever starts it.
+`sync-milestone-oss.yml`: run by the OSS dispatcher below, never by hand. An edit of an OSS milestone is always a real run.
+
+```yaml
+name: sync-milestone-oss
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "The OSS repository of the milestone (the dispatcher gives it)"
+        required: true
+      milestone:
+        description: "The title of the milestone that was edited (the dispatcher gives it)"
+        required: true
+      changes:
+        description: "The changes of the event, as JSON (the dispatcher gives them)"
+        required: true
+      sender:
+        description: "Who made the edit (the dispatcher gives it)"
+        required: true
+permissions:
+  contents: read
+jobs:
+  sync-milestone:
+    uses: spring-io/spring-security-actions/.github/workflows/sync-milestone.yml@<tag>
+    with:
+      repository: ${{ inputs.repository }}
+      milestone: ${{ inputs.milestone }}
+      changes: ${{ inputs.changes }}
+      sender: ${{ inputs.sender }}
+      release-train-repository: ${{ vars.RELEASE_TRAIN_REPOSITORY }}
+      runs-on: ${{ vars.UBUNTU_RUNS_ON }}
+    secrets:
+      RELEASE_AUTOMATION_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+```
+
+The schedule and an edit of a commercial milestone are real runs. Only a run by hand has a dry run, and it is on by default.
 
 ### Syncing by hand, with a dry run
 
-Run the caller of the commercial repository from the Actions tab (**Run workflow**, on its default branch):
+Run `sync-milestone` of the commercial repository from the Actions tab (**Run workflow**, on its default branch):
 
 | What you want | Inputs |
 |---|---|
-| see what would be done for every release of the project | `all` on, `dry-run` on (the default) |
+| see what would be done for every release of the project | `milestone` empty, `dry-run` on (the default) |
 | do it | the same with `dry-run` off |
-| one milestone, and what follows it | `milestone` `7.0.9` (and `repository` for an OSS milestone, `spring-projects/spring-security`), `all` off |
+| one milestone, and what follows it | `milestone` `7.0.9` |
 
-With `all` the run starts with the step `ensure-milestones`, from the version of `gradle.properties` as the branches are now: it closes the milestones that are done, makes what is missing (a tracker that was never made), and says what is not as it should be. The summary of that step comes first. Then the trains are synced. A dry run writes nothing and runs nothing: the summary lists, for each milestone, what it would change (`would change spring-projects/spring-security 7.0.9: description is now: Release Train: 2026.11.19`), which releases would leave a train, and, with `rebuild`, which branches it would build again, and ends with the totals. A real run does the same, and the totals say what was done.
+With no milestone the run starts with the step `ensure-milestones`, from the version of `gradle.properties` as the branches are now: it closes the milestones that are done, makes what is missing (a tracker that was never made), and says what is not as it should be. The summary of that step comes first. Then the trains are synced, and all the release branches are built again. A dry run writes nothing and runs nothing: the summary lists, for each milestone, what it would change (`would change spring-projects/spring-security 7.0.9: description is now: Release Train: 2026.11.19`), which releases would leave a train, and which branches it would build again, and ends with the totals. A real run does the same, and the totals say what was done.
 
-`all` goes through the open milestones that have a release, in the OSS repository (each with its commercial milestone and its hotfix), and the open commercial milestones of long-term support (those with no OSS milestone, that have a `Release Train:` line or a long-term support branch). Closed milestones, the milestones that track the next release (`7.0.10`), titles that are not the version of a release (`7.0.x`), and an OSS milestone that has no due date and no `Release Train:` line (it has never been in a train, and its commercial milestone may be one that was released long ago) are left out. It knows no previous due date, so a release leaves the train that its description names. It writes the line of a release that the train says has joined, and starts nothing else (with `rebuild` off), so it is safe to run twice.
+All of them means the open milestones that have a release, in the OSS repository (each with its commercial milestone and its hotfix), and the open commercial milestones of long-term support (those with no OSS milestone, that have a `Release Train:` line or a long-term support branch). Closed milestones, the milestones that track the next release (`7.0.10`), titles that are not the version of a release (`7.0.x`), and an OSS milestone that has no due date and no `Release Train:` line (it has never been in a train, and its commercial milestone may be one that was released long ago) are left out. It knows no previous due date, so a release leaves the train that its description names. It writes the line of a release that the train says has joined.
+
+A run for one milestone builds its releases again (`would be rebuilt (requested)` in a dry run), because the dependency updates of its train may have changed. An edit builds them again only when it changed the train (`(train changed)`): a typo in the description starts nothing.
 
 It is how to bring the milestones of a project to what the handler would have made, after this was set up: run the dry run, read the summary, and run it again with `dry-run` off.
 
 ### The nightly run
 
-The schedule of the caller runs `all` and `rebuild` every night (06:00 UTC), on the default branch of the commercial repository. First it syncs all the milestones, which writes the train lines that the train now supports. Then it starts the release workflow on the embargoed branches, so that each release branch and snapshot branch is built again with the dependency updates that the train has now, a fresh build runs the tests, and the snapshot is published:
+The schedule of the caller runs all the milestones every night (08:00 UTC, which is 2 AM in US Central in winter and 3 AM in summer), on the default branch of the commercial repository. First it syncs all the milestones, which writes the train lines that the train now supports. Then it starts the release workflow on the embargoed branches, so that each release branch and snapshot branch is built again with the dependency updates that the train has now, a fresh build runs the tests, and the snapshot is published:
 
 - `embargoed/frozen/<generation>` and `embargoed/lts/<generation>` first, all at once, and `embargoed/active/<generation>` after them. The hotfix merges the release, so it needs the new one.
 - It rebuilds a release **until it is ready** in its train, and skips it after that. It also skips every branch while the code freeze runs, because the freeze marks releases ready and bumps the versions. A release with no train is built too, without dependency updates.
@@ -170,7 +192,7 @@ jobs:
           CHANGES: ${{ toJSON(github.event.changes) }}
           SENDER: ${{ github.event.sender.login }}
         run: |
-          gh workflow run sync-milestone.yml \
+          gh workflow run sync-milestone-oss.yml \
             --repo "${GITHUB_REPOSITORY}-commercial" --ref main \
             --field repository="$GITHUB_REPOSITORY" \
             --field milestone="$TITLE" \
