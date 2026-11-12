@@ -35,7 +35,7 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 | [`merge-release`](merge-release/README.md) | Merges the release into the branch of its hotfix. |
 | [`merge-tag`](merge-tag/README.md) | Merges the tag of a release that was made public into its branch and forward through the newer branches, locally, keeping the versions of every branch. |
 | [`name-repositories`](name-repositories/README.md) | The project and its OSS repository, from the commercial repository. |
-| [`open-milestones`](open-milestones/README.md) | Makes the milestones of the next cycle of a code freeze, and links the commercial milestone of the next release to the OSS one. |
+| [`ensure-milestones`](ensure-milestones/README.md) | Makes and closes the milestones of a project from the version of `gradle.properties` after a code freeze has bumped it (the release before is done, the next release and the trackers of the fixes of the active branch are made), with a dry run. |
 | [`plan-freeze`](plan-freeze/README.md) | Plans a code freeze: the next versions, the releases to mark ready, and everything that stops it. |
 | [`plan-post-publish`](plan-post-publish/README.md) | Plans what happens after a release is made public: its kind, whether its issues are copied, the merges of its tag (or, in a dry run before the tag exists, of a ref that stands in for it) and the branches to delete. |
 | [`plan-release-branches`](plan-release-branches/README.md) | What the push of an embargoed branch builds. |

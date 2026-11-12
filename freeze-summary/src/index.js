@@ -135,11 +135,10 @@ const doneResult = (result) => {
 };
 
 /**
- * The milestones that are closed after the pushes: those of the releases, and
- * the trackers of the fixes of the active branches (a hotfix, and the next release).
+ * The milestones of the releases that are closed after the pushes.
  */
 export function milestonesTable(plan, milestones, dryRun) {
-  const rows = [...plan.releases, ...(plan.trackers ?? [])]
+  const rows = plan.releases
     .filter((release) => release.milestone)
     .map((release) => {
       const { milestone } = release;
@@ -159,9 +158,7 @@ export function milestonesTable(plan, milestones, dryRun) {
           ? release.version
           : `[${release.version}](${done?.url ?? milestone.url})`,
         milestone.repository,
-        release.of.join(", ") +
-          (release.hotfix ? " (a hotfix)" : "") +
-          (release.tracker ? " (tracks the fixes of the active branch)" : ""),
+        release.of.join(", ") + (release.hotfix ? " (a hotfix)" : ""),
         `${counts.open} / ${counts.closed}`,
         result,
       ];
@@ -178,56 +175,33 @@ export function milestonesTable(plan, milestones, dryRun) {
   );
 }
 
-const OPENED = {
-  created: "Made",
-  exists: "There already",
-  linked: "Link added",
-  "linked-already": "Has the link already",
+const ENSURED = {
+  closed: ["Closed", "Would be closed"],
+  "already-closed": ["Closed already", "Closed already"],
+  absent: ["Not there", "Not there"],
+  created: ["Made", "Would be made"],
+  exists: ["There already", "There already"],
+  linked: ["Link added", "Link would be added"],
+  "linked-already": ["Has the link already", "Has the link already"],
 };
 
 /**
- * The milestones of the next cycle that are made, and the links added to the commercial
- * milestones that track the fixes of the active branch, once the pushes and the closing are
- * done. A dry run says what it would do, from the plan.
+ * The milestones of the cycle that the step ensure-milestones closed or made, from its file:
+ * the version of gradle.properties after the bump says which. A dry run says what it would do.
  */
-export function openedTable(plan, opened, dryRun) {
-  const find = (kind, repository, title) =>
-    opened?.find(
-      (o) =>
-        o.kind === kind && o.repository === repository && o.title === title,
-    );
-  const result = (done, wouldBe) => {
-    if (dryRun) {
-      return wouldBe;
-    }
-    if (!done) {
-      return "Not done, the freeze did not get to it";
-    }
-    if (done.result === "skipped") {
-      return `Skipped: ${done.reason}`;
-    }
-    if (done.result === "failed") {
-      return `Failed: ${done.error}`;
-    }
-    return OPENED[done.result] ?? done.result;
-  };
-  const rows = [
-    ...(plan.creates ?? []).map((c) => [
-      c.title,
-      c.repository,
-      "Make the milestone",
-      result(
-        find("create", c.repository, c.title),
-        c.exists ? "There already" : "Would be made",
-      ),
-    ]),
-    ...(plan.links ?? []).map((l) => [
-      l.title,
-      l.repository,
-      `Link to the OSS milestone ${l.ossTitle}`,
-      result(find("link", l.repository, l.title), "Would be added"),
-    ]),
-  ];
+export function ensuredTable(ensured, dryRun) {
+  const rows = (ensured?.results ?? []).map((r) => [
+    r.url ? `[${r.title}](${r.url})` : r.title,
+    r.repository,
+    { close: "Close", make: "Make", link: "Link to the OSS milestone" }[
+      r.action
+    ],
+    r.result === "failed"
+      ? `Failed: ${r.error}`
+      : r.result === "skipped"
+        ? `Skipped: ${r.reason}`
+        : (ENSURED[r.result]?.[dryRun ? 1 : 0] ?? r.result),
+  ]);
   return table(["Milestone", "Repository", "What", "Result"], rows);
 }
 
@@ -256,7 +230,7 @@ export function render({
   ready,
   push,
   milestones,
-  opened,
+  ensured,
   dryRun,
   status,
 }) {
@@ -276,9 +250,6 @@ export function render({
       `The plan found ${plan.problems.length === 1 ? "a problem" : `${plan.problems.length} problems`}. Nothing was merged, dispatched or pushed.\n\n${plan.problems.map((p) => `- ${p}`).join("\n")}`,
     );
   }
-  if (plan.warnings?.length > 0) {
-    parts.push(`## Warnings\n${plan.warnings.map((w) => `- ${w}`).join("\n")}`);
-  }
   if (plan.oss.length + plan.lts.length > 0) {
     parts.push(
       `## Versions${plan.problems?.length > 0 ? " (what would have been done)" : ""}\n${versionsTable(plan, apply)}`,
@@ -297,20 +268,16 @@ export function render({
   }
   if (
     plan.problems?.length === 0 &&
-    [...plan.releases, ...(plan.trackers ?? [])].some(
-      (release) => release.milestone,
-    )
+    plan.releases.some((release) => release.milestone)
   ) {
     parts.push(
-      `## Milestones closed\nEach release marked ready has its milestone closed once the pushes succeed, and so has the milestone that tracks the fixes of its active branch (the hotfix, and the next release). A milestone with open issues is closed all the same, and the count is shown. A milestone is closed whether or not it has issues, and none is deleted.\n\n${milestonesTable(plan, milestones, dryRun)}`,
+      `## Milestones closed\nEach release marked ready has its milestone closed once the pushes succeed. A milestone with open issues is closed all the same, and the count is shown. A milestone is closed whether or not it has issues, and none is deleted.\n\n${milestonesTable(plan, milestones, dryRun)}`,
     );
   }
-  if (
-    plan.problems?.length === 0 &&
-    ((plan.creates?.length ?? 0) > 0 || (plan.links?.length ?? 0) > 0)
-  ) {
+  if (plan.problems?.length === 0 && ensured) {
+    const warnings = ensured.warnings ?? [];
     parts.push(
-      `## Milestones of the next cycle\nAfter the milestones are closed, the next OSS release has its milestone, the active branch has the two that track its fixes (the hotfix, and the release after the next), and the commercial milestone of the next release gets the link to the OSS one. One that is there already is left alone.\n\n${openedTable(plan, opened, dryRun)}`,
+      `## Milestones of the cycle\nThe version of gradle.properties after the bump decides them: the release before it is done, the commercial milestones that track the fixes of the active branch (the hotfix, and the next release) are closed, and the next OSS release and the two trackers of the new active branch are made, with the link to the OSS milestone on the one of the next release. One that is right already is left alone.\n\n${warnings.length > 0 ? `${warnings.map((w) => `- Warning: ${w}`).join("\n")}\n\n` : ""}${ensuredTable(ensured, dryRun)}`,
     );
   }
   return parts.join("\n\n");
@@ -326,7 +293,7 @@ export async function main() {
     ready: read(file("ready-file", "ready.json")),
     push: read(file("push-file", "push.json")),
     milestones: read(file("milestones-file", "milestones.json")),
-    opened: read(file("opened-file", "milestones-opened.json")),
+    ensured: read(file("ensured-file", "milestones-ensured.json")),
     dryRun: core.getInput("dry-run") === "true",
     status: core.getInput("job-status"),
   });

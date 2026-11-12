@@ -17,12 +17,13 @@ name: code-freeze
 #      be accepted (git push --dry-run). A dry run ends here.
 #   4. Ready: release-train-ready.yml of the project runs on each release branch, and is waited for.
 #   5. Push: the commercial repository, then OSS, each in one atomic push, without force.
-#   6. Milestones: the milestone of each release is closed, and so are the two commercial ones that
-#      track the fixes of its active branch (the hotfix, and the next release). None is deleted. Then
-#      the milestones of the next cycle are made (the next OSS release, and the
-#      two that track the fixes of the new active branch), and the commercial milestone of the
-#      next release gets the link to the OSS one. This is last, so that a failed push leaves
-#      everything as it was, and the freeze can run again.
+#   6. Milestones: the milestone of each release is closed (none is deleted). Then the milestones of the
+#      cycle are made right from the version of gradle.properties that the push left: the release before
+#      it is done, the two commercial milestones that track the fixes of the active branch (the hotfix,
+#      and the next release) are closed, the next OSS release and the two trackers of the new active
+#      branch are made, and the commercial milestone of the next release gets the link to the OSS one.
+#      This is last, so that a failed push leaves everything as it was, and the freeze can run again.
+#      A dry run does the same from the versions of the plan, and writes nothing.
 #
 # This is a reusable workflow: the commercial repository of a project calls it from a workflow
 # that is run by hand (workflow_dispatch), see docs/code-freeze.md for the caller, the stub that
@@ -142,11 +143,24 @@ jobs:
         uses: spring-io/spring-security-actions/close-milestones@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
-      # After the closing. A milestone that is there already is left alone.
-      - name: Make the milestones of the next cycle
+      # After the closing, and from the version of gradle.properties that the push left on the branches,
+      # which is the one that the plan has: the same step, with the same rules, runs by hand to check the
+      # milestones of a project (the workflow sync-milestone). A milestone that is right is left alone.
+      - name: Make and close the milestones of the cycle
         if: ${{ !inputs.dry-run }}
-        uses: spring-io/spring-security-actions/open-milestones@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
+        uses: spring-io/spring-security-actions/ensure-milestones@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:
+          repository: ${{ steps.repositories.outputs.commercial-repository }}
+          token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+      # Nothing was bumped: the versions are the ones of the plan, and the releases of the plan are
+      # taken as closed. It writes nothing.
+      - name: Say what the milestones of the cycle would be
+        if: ${{ inputs.dry-run }}
+        uses: spring-io/spring-security-actions/ensure-milestones@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
+        with:
+          repository: ${{ steps.repositories.outputs.commercial-repository }}
+          plan-file: ${{ steps.plan.outputs.plan-file }}
+          dry-run: "true"
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Summarize the freeze
         if: ${{ always() }}

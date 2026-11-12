@@ -36595,8 +36595,7 @@ const DEFAULT_PLAN_FILE = "code-freeze/plan.json";
 const DEFAULT_MILESTONES_FILE = "code-freeze/milestones.json";
 
 /**
- * Closes the milestone of one release (or of a tracker of the fixes of the active branch).
- * The milestone is read again, as issues may have been moved in or out since the plan. It is
+ * Closes the milestone of one release. The milestone is read again, as issues may have been moved in or out since the plan. It is
  * closed with open issues too (the result says how many), whether or not it has issues, and
  * one that is closed already is left alone. A milestone is never deleted.
  */
@@ -36638,8 +36637,7 @@ async function closeMilestone({ release }, { octokit }) {
 }
 
 /**
- * Closes the milestones of the releases of a plan, and of its trackers (the milestones that
- * track the fixes of an active branch), each once. It goes on after one that
+ * Closes the milestones of the releases of a plan, each once. It goes on after one that
  * fails, and says which failed: a milestone left open can be closed by hand. Returns what
  * was done for each, in the order of the plan.
  */
@@ -36672,7 +36670,7 @@ async function main() {
   const plan = JSON.parse(external_node_fs_namespaceObject.readFileSync(planFile, "utf8"));
   const octokit = createOctokit({ token: getInput("token") });
   const results = await closeMilestones(
-    { releases: [...plan.releases, ...(plan.trackers ?? [])] },
+    { releases: plan.releases },
     { octokit },
   );
   external_node_fs_namespaceObject.mkdirSync(external_node_path_namespaceObject.dirname(milestonesFile), { recursive: true });

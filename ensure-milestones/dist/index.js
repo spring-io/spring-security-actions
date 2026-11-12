@@ -28624,11 +28624,13 @@ var __webpack_exports__ = {};
 
 // EXPORTS
 __nccwpck_require__.d(__webpack_exports__, {
-  tU: () => (/* binding */ DEFAULT_OPENED_FILE),
-  h5: () => (/* binding */ DEFAULT_PLAN_FILE),
+  Kr: () => (/* binding */ DEFAULT_ENSURED_FILE),
+  M1: () => (/* binding */ ensureMilestones),
   pF: () => (/* binding */ linkLine),
   iW: () => (/* binding */ main),
-  iN: () => (/* binding */ openMilestones),
+  XX: () => (/* binding */ render),
+  Ub: () => (/* binding */ repositoriesOf),
+  x4: () => (/* binding */ versionsOf),
   Ni: () => (/* binding */ withLink)
 });
 
@@ -31479,7 +31481,7 @@ function core_error(message, properties = {}) {
  * @param properties optional properties to add to the annotation.
  */
 function warning(message, properties = {}) {
-    issueCommand('warning', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+    command_issueCommand('warning', utils_toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 /**
  * Adds a notice issue
@@ -36585,6 +36587,174 @@ async function execute(action) {
   }
 }
 
+;// CONCATENATED MODULE: ./src/summary.js
+
+
+
+/**
+ * Adds markdown to the summary of the step (the file named by GITHUB_STEP_SUMMARY). Run
+ * locally, where there is no such file, it prints the markdown instead.
+ */
+function addSummary(markdown) {
+  const file = process.env.GITHUB_STEP_SUMMARY;
+  if (file) {
+    external_node_fs_namespaceObject.appendFileSync(file, `${markdown}\n`);
+  } else {
+    info(markdown);
+  }
+}
+
+/** A markdown table from a header and rows, each a list of cells. */
+function table(header, rows) {
+  const line = (cells) => `| ${cells.join(" | ")} |`;
+  return [line(header), line(header.map(() => "---")), ...rows.map(line)].join(
+    "\n",
+  );
+}
+
+;// CONCATENATED MODULE: ./src/state.js
+const SNAPSHOT = "-SNAPSHOT";
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The version that a snapshot version is going to be released as: 7.0.10-SNAPSHOT is 7.0.10. */
+function candidateOf(snapshotVersion) {
+  const version = (snapshotVersion ?? "").trim();
+  if (!version.endsWith(SNAPSHOT)) {
+    throw new Error(`"${version}" is not a snapshot version`);
+  }
+  const candidate = version.slice(0, -SNAPSHOT.length);
+  if (!/^\d+\.\d+\.\d+$/.test(candidate)) {
+    throw new Error(
+      `"${version}" has no release: expected <major>.<minor>.<patch>${SNAPSHOT}`,
+    );
+  }
+  return candidate;
+}
+
+// The order of the releases of a .0 version: milestones, then release candidates, then the GA.
+function releaseOrder(title, candidate) {
+  const match = title.slice(candidate.length).match(/^-(M|RC)(\d+)$/);
+  if (!match) {
+    return [2, 0];
+  }
+  return [match[1] === "M" ? 0 : 1, Number(match[2])];
+}
+
+/**
+ * The titles of the open milestones of a .0 version in the order that they are released
+ * (7.2.0-M2, 7.2.0-RC1, 7.2.0), by due date (none is last), and for one day milestones, then
+ * release candidates, then the GA.
+ */
+function openReleasesOf(candidate, milestones) {
+  const pattern = new RegExp(`^${escapeRegExp(candidate)}(-(M|RC)\\d+)?$`);
+  const dueOf = (m) => (m.due_on ? Date.parse(m.due_on) : Infinity);
+  return milestones
+    .filter((m) => m.state === "open" && pattern.test(m.title))
+    .sort((a, b) => {
+      const dueA = dueOf(a);
+      const dueB = dueOf(b);
+      if (dueA !== dueB) {
+        return dueA < dueB ? -1 : 1;
+      }
+      const [kindA, numberA] = releaseOrder(a.title, candidate);
+      const [kindB, numberB] = releaseOrder(b.title, candidate);
+      return kindA - kindB || numberA - numberB;
+    })
+    .map((m) => m.title);
+}
+
+/**
+ * The state that the milestones of a branch have to be in, from its version, which is the one
+ * after a code freeze has bumped it: the version that the frozen branch builds next, in
+ * `gradle.properties`. `ossMilestones` are the milestones of the OSS repository, and `closing`
+ * the titles of them that a freeze closes, and are taken as closed.
+ *
+ * The active branch is at the version of the release that the frozen branch builds now, so its
+ * fixes ship twice: in the hotfix of that release, and in the next release of OSS. Both are
+ * milestones of the commercial repository that track the fixes (the trackers). For the version
+ * 7.0.10 (the one before it was 7.0.9, P):
+ *
+ * - closed: OSS 7.0.9, commercial 7.0.9.1 (the hotfix of the one before) and commercial 7.0.10
+ *   (the tracker of the release that the frozen branch has the fixes for: it ships next),
+ * - there: OSS 7.0.10, commercial 7.0.10.1 and 7.0.11 (the trackers of the new active branch),
+ * - linked: commercial 7.0.10 has the link to OSS 7.0.10.
+ *
+ * It is the same state before the freeze (7.0.9) and after it (7.0.10), so a run of it, by the
+ * freeze or by hand, is right for the version that the branch has now. A .0 version stays the
+ * same until its GA, so the milestones decide: the release that is made next is the open
+ * milestone of it with the earliest due date. Before the GA there is no hotfix and nothing
+ * in OSS to make: the tracker of that release is closed, and the tracker of the one after it
+ * is made, if it exists in OSS. The GA is like any release. Long-term support has only the
+ * release before it, commercial, which is closed.
+ *
+ * It returns { close, make, link, warnings }. Each is an array of { repository, title }, with
+ * the repository "oss" or "host" (the commercial one). `make` may have a `link` (it gets the
+ * link to the OSS milestone of the same title) and `link` is { title } of a commercial
+ * milestone that gets the link.
+ */
+function wantedFor({
+  version,
+  ossMilestones = [],
+  closing = [],
+  lts = false,
+}) {
+  const candidate = candidateOf(version);
+  const [major, minor, patch] = candidate.split(".").map(Number);
+  const wanted = { close: [], make: [], link: [], warnings: [] };
+  const closeIt = (repository, title) =>
+    wanted.close.push({ repository, title });
+  const makeIt = (repository, title, extra = {}) =>
+    wanted.make.push({ repository, title, ...extra });
+
+  if (lts) {
+    if (patch > 0) {
+      closeIt("host", `${major}.${minor}.${patch - 1}`);
+    }
+    return wanted;
+  }
+
+  // the release that is made next, and whether the version before it has a patch
+  let release = candidate;
+  if (patch === 0) {
+    const state = ossMilestones.map((m) =>
+      closing.includes(m.title) ? { ...m, state: "closed" } : m,
+    );
+    const open = openReleasesOf(candidate, state);
+    release = open[0];
+    if (!release) {
+      wanted.warnings.push(
+        `the OSS repository has no open milestone for ${candidate}, one of ${candidate}, ${candidate}-M<n> and ${candidate}-RC<n>`,
+      );
+      return wanted;
+    }
+    if (release !== candidate) {
+      // a milestone or a release candidate: no hotfix, and nothing is made in OSS (people plan them)
+      closeIt("host", release);
+      wanted.link.push({ title: release });
+      if (open[1]) {
+        makeIt("host", open[1], { link: true });
+      } else {
+        wanted.warnings.push(
+          `no open milestone for ${candidate} after ${release}: one is needed for the fixes after it`,
+        );
+      }
+      return wanted;
+    }
+  }
+
+  if (patch > 0) {
+    const before = `${major}.${minor}.${patch - 1}`;
+    closeIt("oss", before);
+    closeIt("host", `${before}.1`);
+  }
+  closeIt("host", release);
+  makeIt("oss", release);
+  makeIt("host", `${release}.1`);
+  makeIt("host", `${major}.${minor}.${patch + 1}`);
+  wanted.link.push({ title: release });
+  return wanted;
+}
+
 ;// CONCATENATED MODULE: ./src/index.js
 
 
@@ -36592,8 +36762,9 @@ async function execute(action) {
 
 
 
-const DEFAULT_PLAN_FILE = "code-freeze/plan.json";
-const DEFAULT_OPENED_FILE = "code-freeze/milestones-opened.json";
+
+
+const DEFAULT_ENSURED_FILE = "code-freeze/milestones-ensured.json";
 
 /** The line that says where the OSS milestone of a commercial one is. */
 const linkLine = (url) => `OSS milestone: ${url}`;
@@ -36609,26 +36780,76 @@ function withLink(description, url) {
     : `${text.trimEnd()}\n\n${linkLine(url)}`;
 }
 
+/** The OSS repository and the commercial one, from either: the commercial one ends with -commercial. */
+function repositoriesOf(repository) {
+  return repository.endsWith("-commercial")
+    ? { oss: repository.slice(0, -"-commercial".length), host: repository }
+    : { oss: repository, host: `${repository}-commercial` };
+}
+
+const VERSION_LINE = /^version=([^\r\n]*)/m;
+
 /**
- * Makes the milestones of the next cycle of a code freeze, and links the trackers of the
- * fixes to the OSS milestones. The plan (`plan-freeze`) says which:
- *
- * - `creates`: a milestone that has no milestone of that title in its repository, open or
- *   closed, is made, with a title and nothing else (and the description, if the plan has
- *   one). One that is there is left alone.
- * - `links`: a commercial milestone gets the line `OSS milestone: <url>` added to its
- *   description, if it does not have the URL, and the rest of its description is kept. It is
- *   read again first: one that is not there (someone deleted it by hand) gets nothing.
- *
- * It goes on after one that fails, and says which failed. Returns what was done, in order.
+ * The versions of the branches of the commercial repository, from `gradle.properties` on
+ * each: the frozen branches (one for each OSS generation, the version that it builds next) and
+ * the long-term support ones. It reads what is there now, after a freeze has bumped it.
  */
-async function openMilestones(
-  { creates = [], links = [] },
-  { octokit },
+async function versionsOf(octokit, host) {
+  const target = parseRepository(host);
+  const names = (
+    await call(
+      `Reading the branches of ${host}`,
+      octokit.paginate(octokit.rest.repos.listBranches, {
+        ...target,
+        per_page: 100,
+      }),
+    )
+  ).map((b) => b.name);
+  const versions = [];
+  for (const [prefix, lts] of [
+    ["embargoed/frozen/", false],
+    ["embargoed/lts/", true],
+  ]) {
+    for (const branch of names.filter((n) => n.startsWith(prefix))) {
+      try {
+        const { data } = await octokit.rest.repos.getContent({
+          ...target,
+          path: "gradle.properties",
+          ref: branch,
+        });
+        const text = Buffer.from(data.content, "base64").toString("utf8");
+        const version = VERSION_LINE.exec(text)?.[1]?.trim();
+        if (version) {
+          versions.push({ branch, version, lts });
+        }
+      } catch (error) {
+        if (error.status !== 404) {
+          throw error;
+        }
+      }
+    }
+  }
+  return versions;
+}
+
+/**
+ * Makes the milestones of a project what its versions say they should be, and closes the ones
+ * that are done (see wantedFor, which has the rules): it closes a milestone that is open, makes
+ * one that is not there (with a title only, open or closed counts as there), and adds the link
+ * to the OSS milestone to the commercial one that tracks it. It never deletes a milestone, never
+ * reopens one, and leaves alone what is right, so that a run that is done again does nothing.
+ *
+ * `versions` are { version, lts } for each branch, and `closing` the OSS milestones that a
+ * code freeze closes (taken as closed). With `dryRun` nothing is written: `results` has what
+ * would be done. It goes on after one that fails, and says which.
+ */
+async function ensureMilestones(
+  { repositories, versions, closing = [], dryRun = false },
+  { octokit, log = () => {} },
 ) {
+  const { oss, host } = repositories;
   const lists = new Map();
-  // the milestones of a repository, all states, read once: the ones that this run makes are added
-  const milestonesOf = async (repository) => {
+  const list = async (repository) => {
     if (!lists.has(repository)) {
       const { owner, repo } = parseRepository(repository);
       lists.set(
@@ -36646,125 +36867,246 @@ async function openMilestones(
     }
     return lists.get(repository);
   };
+  const repositoryOf = (which) => (which === "oss" ? oss : host);
+  const find = async (which, title) =>
+    (await list(repositoryOf(which))).find((m) => m.title === title);
+
+  const ossMilestones = await list(oss);
+  const wanted = { close: [], make: [], link: [], warnings: [] };
+  const seen = new Set();
+  const add = (kind, item) => {
+    const key = `${kind} ${item.repository ?? "host"} ${item.title}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      wanted[kind].push(item);
+    }
+  };
+  for (const { version, lts, branch } of versions) {
+    let one;
+    try {
+      one = wantedFor({ version, ossMilestones, closing, lts });
+    } catch (error) {
+      wanted.warnings.push(`${branch ?? version}: ${error.message}`);
+      continue;
+    }
+    one.close.forEach((c) => add("close", c));
+    one.make.forEach((m) => add("make", m));
+    one.link.forEach((l) => add("link", l));
+    wanted.warnings.push(...one.warnings);
+  }
+
   const results = [];
-
-  for (const create of creates) {
-    const base = {
-      kind: "create",
-      repository: create.repository,
-      title: create.title,
-    };
+  const record = (action, repository, title, result, extra = {}) => {
+    results.push({ action, repository, title, result, ...extra });
+    log(
+      `${action} ${repository} ${title}: ${result}${extra.error ? `, ${extra.error}` : ""}`,
+    );
+  };
+  const guard = async (action, repository, title, work) => {
     try {
-      const milestones = await milestonesOf(create.repository);
-      const found = milestones.find((m) => m.title === create.title);
+      await work();
+    } catch (error) {
+      record(action, repository, title, "failed", { error: error.message });
+    }
+  };
+
+  for (const { repository: which, title } of wanted.close) {
+    const repository = repositoryOf(which);
+    await guard("close", repository, title, async () => {
+      const found = await find(which, title);
+      if (!found) {
+        return record("close", repository, title, "absent");
+      }
+      if (found.state === "closed") {
+        return record("close", repository, title, "already-closed", {
+          url: found.html_url,
+        });
+      }
+      if (!dryRun) {
+        const { owner, repo } = parseRepository(repository);
+        await call(
+          `Closing the milestone ${title} of ${repository}`,
+          octokit.rest.issues.updateMilestone({
+            owner,
+            repo,
+            milestone_number: found.number,
+            state: "closed",
+          }),
+        );
+      }
+      found.state = "closed";
+      record("close", repository, title, "closed", {
+        url: found.html_url,
+        open: found.open_issues,
+      });
+    });
+  }
+
+  for (const { repository: which, title, link } of wanted.make) {
+    const repository = repositoryOf(which);
+    await guard("make", repository, title, async () => {
+      const found = await find(which, title);
       if (found) {
-        results.push({ ...base, result: "exists", url: found.html_url });
-        continue;
+        return record("make", repository, title, "exists", {
+          url: found.html_url,
+        });
       }
-      const { owner, repo } = parseRepository(create.repository);
-      const { data } = await call(
-        `Creating the milestone ${create.title} of ${create.repository}`,
-        octokit.rest.issues.createMilestone({
-          owner,
-          repo,
-          title: create.title,
-          ...(create.description && { description: create.description }),
-        }),
-      );
-      milestones.push(data);
-      results.push({ ...base, result: "created", url: data.html_url });
-    } catch (error) {
-      results.push({ ...base, result: "failed", error: error.message });
-    }
+      // a tracker after a release candidate is made only if OSS has its milestone: people plan them
+      const ossOne = link ? await find("oss", title) : undefined;
+      if (link && !ossOne) {
+        return record("make", repository, title, "skipped", {
+          reason: `${oss} has no milestone ${title}`,
+        });
+      }
+      let made = {
+        title,
+        number: 0,
+        state: "open",
+        description: "",
+        html_url: "",
+      };
+      if (!dryRun) {
+        const { owner, repo } = parseRepository(repository);
+        ({ data: made } = await call(
+          `Creating the milestone ${title} of ${repository}`,
+          octokit.rest.issues.createMilestone({
+            owner,
+            repo,
+            title,
+            ...(ossOne && { description: linkLine(ossOne.html_url) }),
+          }),
+        ));
+      }
+      (await list(repository)).push(made);
+      record("make", repository, title, "created", { url: made.html_url });
+    });
   }
 
-  for (const link of links) {
-    const base = {
-      kind: "link",
-      repository: link.repository,
-      title: link.title,
-      ossTitle: link.ossTitle,
-    };
-    try {
-      const oss = (await milestonesOf(link.ossRepository)).find(
-        (m) => m.title === link.ossTitle,
-      );
-      if (!oss) {
-        results.push({
-          ...base,
-          result: "skipped",
-          reason: `${link.ossRepository} has no milestone ${link.ossTitle}`,
+  for (const { title } of wanted.link) {
+    await guard("link", host, title, async () => {
+      const ossOne = await find("oss", title);
+      const hostOne = await find("host", title);
+      if (!ossOne || !hostOne) {
+        return record("link", host, title, "skipped", {
+          reason: `${!ossOne ? oss : host} has no milestone ${title}`,
         });
-        continue;
       }
-      const tracker = (await milestonesOf(link.repository)).find(
-        (m) => m.title === link.title,
-      );
-      if (!tracker) {
-        results.push({
-          ...base,
-          result: "skipped",
-          reason: `${link.repository} has no milestone ${link.title} (it is not there)`,
+      const description = withLink(hostOne.description, ossOne.html_url);
+      if (description === (hostOne.description ?? "")) {
+        return record("link", host, title, "linked-already", {
+          url: ossOne.html_url,
         });
-        continue;
       }
-      // the milestone is read again: the list is older than the closing of it
-      const { owner, repo } = parseRepository(link.repository);
-      const { data } = await call(
-        `Reading the milestone ${link.title} of ${link.repository}`,
-        octokit.rest.issues.getMilestone({
-          owner,
-          repo,
-          milestone_number: tracker.number,
-        }),
-      );
-      const description = withLink(data.description, oss.html_url);
-      if (description === (data.description ?? "")) {
-        results.push({ ...base, result: "linked-already", url: oss.html_url });
-        continue;
+      if (!dryRun) {
+        const { owner, repo } = parseRepository(host);
+        await call(
+          `Updating the description of the milestone ${title} of ${host}`,
+          octokit.rest.issues.updateMilestone({
+            owner,
+            repo,
+            milestone_number: hostOne.number,
+            description,
+          }),
+        );
       }
-      await call(
-        `Updating the description of the milestone ${link.title} of ${link.repository}`,
-        octokit.rest.issues.updateMilestone({
-          owner,
-          repo,
-          milestone_number: tracker.number,
-          description,
-        }),
-      );
-      results.push({ ...base, result: "linked", url: oss.html_url });
-    } catch (error) {
-      results.push({ ...base, result: "failed", error: error.message });
-    }
+      hostOne.description = description;
+      record("link", host, title, "linked", { url: ossOne.html_url });
+    });
   }
-  return results;
+  return { results, warnings: wanted.warnings };
+}
+
+const RESULTS = {
+  closed: ["Closed", "Would be closed"],
+  "already-closed": ["Closed already", "Closed already"],
+  absent: ["Not there", "Not there"],
+  created: ["Made", "Would be made"],
+  exists: ["There already", "There already"],
+  linked: ["Link added", "Link would be added"],
+  "linked-already": ["Has the link already", "Has the link already"],
+};
+
+/** The summary of a run, as markdown: what was done to each milestone, and the warnings. */
+function render({ repository, dryRun, results, warnings = [] }) {
+  const lines = [
+    `# Milestones of ${repository}${dryRun ? "     DRY RUN: nothing was written" : ""}`,
+    "",
+  ];
+  if (warnings.length > 0) {
+    lines.push("## Warnings", ...warnings.map((w) => `- ${w}`), "");
+  }
+  const rows = results.map((r) => [
+    r.url ? `[${r.title}](${r.url})` : r.title,
+    r.repository,
+    { close: "Close", make: "Make", link: "Link to the OSS milestone" }[
+      r.action
+    ],
+    r.result === "failed"
+      ? `Failed: ${r.error}`
+      : r.result === "skipped"
+        ? `Skipped: ${r.reason}`
+        : (RESULTS[r.result]?.[dryRun ? 1 : 0] ?? r.result),
+  ]);
+  lines.push(
+    rows.length > 0
+      ? table(["Milestone", "Repository", "What", "Result"], rows)
+      : "Nothing to do.",
+    "",
+  );
+  return lines.join("\n");
 }
 
 async function main() {
-  const base = process.env.RUNNER_TEMP ?? process.cwd();
-  const planFile =
-    getInput("plan-file") || external_node_path_namespaceObject.join(base, DEFAULT_PLAN_FILE);
-  const openedFile =
-    getInput("opened-file") || external_node_path_namespaceObject.join(base, DEFAULT_OPENED_FILE);
-  const plan = JSON.parse(external_node_fs_namespaceObject.readFileSync(planFile, "utf8"));
+  const repository = getInput("repository", { required: true });
+  const dryRun = getInput("dry-run") === "true";
+  const planFile = getInput("plan-file");
+  const outputFile =
+    getInput("output-file") ||
+    external_node_path_namespaceObject.join(process.env.RUNNER_TEMP ?? process.cwd(), DEFAULT_ENSURED_FILE);
+  const repositories = repositoriesOf(repository);
   const octokit = createOctokit({ token: getInput("token") });
-  const results = await openMilestones(
-    { creates: plan.creates, links: plan.links },
-    { octokit },
-  );
-  external_node_fs_namespaceObject.mkdirSync(external_node_path_namespaceObject.dirname(openedFile), { recursive: true });
-  external_node_fs_namespaceObject.writeFileSync(openedFile, `${JSON.stringify(results, null, 2)}\n`);
-  setOutput("opened-file", openedFile);
-  for (const r of results) {
-    info(
-      `${r.kind} ${r.repository} ${r.title}: ${r.error ?? r.reason ?? r.result}`,
-    );
+
+  let versions;
+  let closing = [];
+  if (planFile) {
+    // before the branches are bumped (a dry run of the freeze): the versions that the plan has
+    // for them, and the releases that the freeze closes
+    const plan = JSON.parse(external_node_fs_namespaceObject.readFileSync(planFile, "utf8"));
+    versions = [
+      ...plan.oss.map((g) => ({
+        branch: g.branch,
+        version: g.next,
+        lts: false,
+      })),
+      ...plan.lts.map((g) => ({
+        branch: g.branch,
+        version: g.next,
+        lts: true,
+      })),
+    ];
+    closing = plan.releases
+      .filter((r) => r.milestone?.repository === repositories.oss)
+      .map((r) => r.version);
+  } else {
+    versions = await versionsOf(octokit, repositories.host);
   }
+  const { results, warnings } = await ensureMilestones(
+    { repositories, versions, closing, dryRun },
+    { octokit, log: (line) => info(line) },
+  );
+  external_node_fs_namespaceObject.mkdirSync(external_node_path_namespaceObject.dirname(outputFile), { recursive: true });
+  external_node_fs_namespaceObject.writeFileSync(
+    outputFile,
+    `${JSON.stringify({ results, warnings }, null, 2)}\n`,
+  );
+  setOutput("ensured-file", outputFile);
+  warnings.forEach((w) => warning(w));
+  addSummary(render({ repository, dryRun, results, warnings }));
   const failed = results.filter((r) => r.result === "failed");
   if (failed.length > 0) {
     throw new TitledError(
       "Milestones not made",
-      `The freeze is done, and ${failed.length === 1 ? "this milestone was" : "these milestones were"} not made or linked: do it by hand.\n- ${failed.map((r) => `${r.kind} ${r.repository} ${r.title}: ${r.error}`).join("\n- ")}`,
+      `${failed.length === 1 ? "This milestone was" : "These milestones were"} not made, closed or linked: do it by hand.\n- ${failed.map((r) => `${r.action} ${r.repository} ${r.title}: ${r.error}`).join("\n- ")}`,
     );
   }
 }
@@ -36773,10 +37115,12 @@ if (isMain(import.meta.url)) {
   execute(main);
 }
 
-var __webpack_exports__DEFAULT_OPENED_FILE = __webpack_exports__.tU;
-var __webpack_exports__DEFAULT_PLAN_FILE = __webpack_exports__.h5;
+var __webpack_exports__DEFAULT_ENSURED_FILE = __webpack_exports__.Kr;
+var __webpack_exports__ensureMilestones = __webpack_exports__.M1;
 var __webpack_exports__linkLine = __webpack_exports__.pF;
 var __webpack_exports__main = __webpack_exports__.iW;
-var __webpack_exports__openMilestones = __webpack_exports__.iN;
+var __webpack_exports__render = __webpack_exports__.XX;
+var __webpack_exports__repositoriesOf = __webpack_exports__.Ub;
+var __webpack_exports__versionsOf = __webpack_exports__.x4;
 var __webpack_exports__withLink = __webpack_exports__.Ni;
-export { __webpack_exports__DEFAULT_OPENED_FILE as DEFAULT_OPENED_FILE, __webpack_exports__DEFAULT_PLAN_FILE as DEFAULT_PLAN_FILE, __webpack_exports__linkLine as linkLine, __webpack_exports__main as main, __webpack_exports__openMilestones as openMilestones, __webpack_exports__withLink as withLink };
+export { __webpack_exports__DEFAULT_ENSURED_FILE as DEFAULT_ENSURED_FILE, __webpack_exports__ensureMilestones as ensureMilestones, __webpack_exports__linkLine as linkLine, __webpack_exports__main as main, __webpack_exports__render as render, __webpack_exports__repositoriesOf as repositoriesOf, __webpack_exports__versionsOf as versionsOf, __webpack_exports__withLink as withLink };

@@ -1,5 +1,5 @@
 {
-  "name": "open-milestones",
+  "name": "ensure-milestones",
   "version": "0.0.1",
   "private": true,
   "description": "Makes the milestones of the next cycle of a code freeze, and links the trackers to the OSS milestones",

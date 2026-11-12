@@ -1,5 +1,5 @@
 name: "close-milestones"
-description: "Closes the milestone of each release of a code freeze, and of the trackers of the fixes of the active branch, and never deletes one"
+description: "Closes the milestone of each release of a code freeze, and never deletes one"
 
 inputs:
   plan-file:

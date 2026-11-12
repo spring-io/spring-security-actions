@@ -18,7 +18,8 @@ name: sync-milestone
 #     OSS milestone.
 #
 # By hand, it can sync one milestone (and what follows it), or all of them (all), and the dry run only
-# says what it would do. Every night the caller runs it with all and rebuild: the milestones are synced,
+# says what it would do. With all it first makes and closes the milestones of the cycle from the versions
+# of the branches (the step of the code freeze), and then syncs the trains. Every night the caller runs it with all and rebuild: the milestones are synced,
 # and the release workflow is started on the embargoed branches (until the release is ready), so that
 # every branch is built again with the dependency updates that the train has, and tested. See
 # docs/milestones.md.
@@ -99,6 +100,15 @@ jobs:
     name: Sync the milestone
     runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     steps:
+      # By hand, with all: first the milestones of the cycle, from the version of gradle.properties as
+      # the branches are now, as the code freeze does after the bump (see docs/milestones.md).
+      - name: Make and close the milestones of the cycle
+        if: ${{ inputs.all }}
+        uses: spring-io/spring-security-actions/ensure-milestones@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
+        with:
+          repository: ${{ inputs.repository }}
+          dry-run: ${{ inputs.dry-run }}
+          token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       - name: Sync the milestone
         uses: spring-io/spring-security-actions/sync-milestone@d353ddb5cc40a92e705d20369b69c30c778e606a # 0.0.27
         with:

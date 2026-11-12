@@ -1,6 +1,6 @@
 # close-milestones
 
-Closes the milestone of each release of a code freeze (`7.0.5`, `7.1.0-RC1`, `6.5.11`), once the freeze has pushed its branches, and does the same for the **trackers** that the plan has: the commercial milestones that track the fixes of an active branch (the hotfix, and the next release). A milestone is never deleted, whether or not it has issues. The releases, the trackers and their milestones are in the plan that `plan-freeze` wrote: the OSS repository has the milestones of the OSS and frozen releases, and the commercial repository has those of a hotfix, of a tracker and of long-term support.
+Closes the milestone of each release of a code freeze (`7.0.5`, `7.1.0-RC1`, `6.5.11`), once the freeze has pushed its branches. A milestone is never deleted, whether or not it has issues. The releases and their milestones are in the plan that `plan-freeze` wrote: the OSS repository has the milestones of the OSS and frozen releases, and the commercial repository has those of a hotfix and of long-term support. The milestones that track the fixes of the active branch (the hotfix, and the next release) are closed by [ensure-milestones](../ensure-milestones/README.md), which comes after.
 
 ## What it does
 

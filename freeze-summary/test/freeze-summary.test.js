@@ -202,120 +202,86 @@ describe("render", () => {
     });
   });
 
-  describe("the milestones of the next cycle", () => {
+  describe("the milestones of the cycle", () => {
     const oss = "spring-projects/spring-security";
     const commercial = "spring-projects/spring-security-commercial";
-    const withCycle = {
-      ...plan,
-      warnings: [
-        `${commercial} has no milestone 7.1.2, which tracks the fixes of 7.1.x: there is nothing to close`,
-      ],
-      trackers: [
+    const ensured = {
+      warnings: ["no open milestone for 7.2.0 after 7.2.0-RC1"],
+      results: [
         {
-          version: "7.0.6",
-          tracker: true,
-          of: ["7.0.x"],
-          milestone: {
-            repository: commercial,
-            title: "7.0.6",
-            number: 50,
-            url: `https://github.com/${commercial}/milestone/50`,
-            state: "open",
-            open: 0,
-            closed: 0,
-          },
-        },
-      ],
-      creates: [
-        { repository: oss, title: "7.0.6", exists: false },
-        { repository: commercial, title: "7.0.6.1", exists: false },
-        { repository: commercial, title: "7.0.7", exists: true },
-      ],
-      links: [
-        {
+          action: "close",
           repository: commercial,
           title: "7.0.6",
-          ossRepository: oss,
-          ossTitle: "7.0.6",
+          result: "closed",
+          url: `https://github.com/${commercial}/milestone/50`,
         },
-      ],
-    };
-
-    it("says what a dry run would do, and has the tracker among the milestones that are closed", () => {
-      const markdown = render({ plan: withCycle, apply, dryRun: true });
-      expect(markdown).toContain("## Warnings");
-      expect(markdown).toContain("has no milestone 7.1.2");
-      expect(markdown).toContain(
-        `| [7.0.6](https://github.com/${commercial}/milestone/50) | ${commercial} | 7.0.x (tracks the fixes of the active branch) | 0 / 0 | Would be closed |`,
-      );
-      expect(markdown).toContain("## Milestones of the next cycle");
-      expect(markdown).toContain(
-        `| 7.0.6 | ${oss} | Make the milestone | Would be made |`,
-      );
-      expect(markdown).toContain(
-        `| 7.0.7 | ${commercial} | Make the milestone | There already |`,
-      );
-      expect(markdown).toContain(
-        `| 7.0.6 | ${commercial} | Link to the OSS milestone 7.0.6 | Would be added |`,
-      );
-    });
-
-    it("says what was done, and why a link was skipped", () => {
-      const opened = [
-        { kind: "create", repository: oss, title: "7.0.6", result: "created" },
+        { action: "make", repository: oss, title: "7.0.6", result: "created" },
         {
-          kind: "create",
-          repository: commercial,
-          title: "7.0.6.1",
-          result: "failed",
-          error: "403 Forbidden",
-        },
-        {
-          kind: "create",
+          action: "make",
           repository: commercial,
           title: "7.0.7",
           result: "exists",
         },
         {
-          kind: "link",
+          action: "link",
           repository: commercial,
           title: "7.0.6",
-          result: "skipped",
-          reason: `${commercial} has no milestone 7.0.6 (it is not there)`,
+          result: "linked",
         },
-      ];
-      const markdown = render({
-        plan: withCycle,
-        apply,
-        opened,
-        dryRun: false,
-      });
+      ],
+    };
+
+    it("says what a dry run would do, from the file of the step", () => {
+      const markdown = render({ plan, apply, ensured, dryRun: true });
+      expect(markdown).toContain("## Milestones of the cycle");
       expect(markdown).toContain(
-        `| 7.0.6 | ${oss} | Make the milestone | Made |`,
+        "- Warning: no open milestone for 7.2.0 after 7.2.0-RC1",
       );
       expect(markdown).toContain(
-        `| 7.0.6.1 | ${commercial} | Make the milestone | Failed: 403 Forbidden |`,
+        `| [7.0.6](https://github.com/${commercial}/milestone/50) | ${commercial} | Close | Would be closed |`,
+      );
+      expect(markdown).toContain(`| 7.0.6 | ${oss} | Make | Would be made |`);
+      expect(markdown).toContain(
+        `| 7.0.7 | ${commercial} | Make | There already |`,
       );
       expect(markdown).toContain(
-        `| 7.0.7 | ${commercial} | Make the milestone | There already |`,
+        `| 7.0.6 | ${commercial} | Link to the OSS milestone | Link would be added |`,
       );
-      expect(markdown).toContain("| Skipped: ");
-      expect(markdown).toContain("(it is not there)");
     });
 
-    it("says that they were not made if the freeze did not get to it", () => {
+    it("says what was done, and why one was skipped or failed", () => {
       const markdown = render({
-        plan: withCycle,
+        plan,
         apply,
+        ensured: {
+          results: [
+            ...ensured.results.slice(0, 2),
+            {
+              action: "make",
+              repository: commercial,
+              title: "7.0.7",
+              result: "failed",
+              error: "403 Forbidden",
+            },
+            {
+              action: "link",
+              repository: commercial,
+              title: "7.0.6",
+              result: "skipped",
+              reason: `${commercial} has no milestone 7.0.6`,
+            },
+          ],
+        },
         dryRun: false,
-        status: "failure",
       });
-      expect(markdown).toContain("Not done, the freeze did not get to it");
+      expect(markdown).toContain(`| 7.0.6 | ${oss} | Make | Made |`);
+      expect(markdown).toContain("Failed: 403 Forbidden");
+      expect(markdown).toContain("Skipped: ");
     });
 
-    it("has no section for a plan with no milestones to make", () => {
+    it("has no section if the step did not run", () => {
       expect(render({ plan, apply, dryRun: true })).not.toContain(
-        "Milestones of the next cycle",
+        "Milestones of the cycle",
       );
     });
   });

@@ -10,7 +10,7 @@ For every OSS branch (`7.0.x`, `main`) it reads `gradle.properties` of the OSS b
 
 **The releases to mark ready.** The release of a branch is worked out as `compute-release-version` does (`7.0.5`, or for a `.0` version the open milestone with the earliest due date: `7.2.0-M2`). `release/7.0.5` is built from the frozen branch, and is the release of the OSS branch too. The active branch has the hotfix `release/7.0.5.1` if it has changes that the frozen one lacks (and a `.0` only for its GA). Each release branch is listed once, with its milestone (`repository`, `number`, `url`, `state` and the `open` and `closed` issues), which `close-milestones` closes after the freeze: the OSS repository has the milestone of the releases of the OSS and frozen branches, and the commercial one has those of a hotfix and of long-term support. A release has `hotfix: true` for the hotfix.
 
-**The milestones of the cycle.** From `7.0.9-SNAPSHOT` to `7.0.10-SNAPSHOT` the plan closes OSS `7.0.9` (a release), the commercial `7.0.9.1` (a release, the hotfix) and the commercial `7.0.10` (a `tracker`: the milestone of the next release that tracks the fixes of the active branch), and makes OSS `7.0.10` and the commercial `7.0.10.1` and `7.0.11`. It links the commercial `7.0.10` to the OSS one. For a `.0` version that is not made as the GA nothing is made in OSS: it closes the tracker after the one that is made, and makes the next tracker in the commercial repository if its OSS milestone exists. What is expected and not there is a `warnings` entry, and not a problem. The rules are in `src/milestones.js`, and in [the code freeze guide](../docs/code-freeze.md#the-milestones-of-a-cycle).
+**The milestones of the cycle.** The plan has the milestones of the releases that are made (`releases`), which `close-milestones` closes. It does not plan the others: the step [ensure-milestones](../ensure-milestones/README.md) reads the version of `gradle.properties` after the freeze has bumped it, and closes and makes the milestones of the cycle from it (see [the code freeze guide](../docs/code-freeze.md#the-milestones-of-a-cycle)). Its dry run uses `next` of this plan.
 
 ## What stops it
 
@@ -42,7 +42,7 @@ A release that is **ready already** in the train is not a problem: its entry in 
 
 ## Outputs
 
-`plan-file`. The plan has `oss` and `lts` (each branch with `current`, `next` and `bump`), `releases` (`version`, `branch`, `builtFrom`, `of`, `hotfix`, `milestone`), `trackers` (milestones to close, shaped like the releases, with `tracker`), `creates` (`repository`, `title`, `exists`, and a `description` if it has one) and `links` (the commercial milestone that gets the link to an OSS one), `warnings` and `problems`.
+`plan-file`. The plan has `oss` and `lts` (each branch with `current`, `next` and `bump`), `releases` (`version`, `branch`, `builtFrom`, `of`, `hotfix`, `milestone`), and `problems`.
 
 ## Secrets and permissions
 

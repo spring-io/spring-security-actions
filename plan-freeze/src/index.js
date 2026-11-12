@@ -3,7 +3,6 @@ import path from "node:path";
 import * as core from "@actions/core";
 import { git, gitTry } from "./git.js";
 import { call, createOctokit, parseRepository } from "./octokit.js";
-import { planMilestones } from "./milestones.js";
 import { execute, isMain, TitledError } from "./run.js";
 import {
   candidateOf,
@@ -180,10 +179,6 @@ export async function planFreeze(
   const oss = [];
   const lts = [];
   const releases = new Map();
-  const trackers = [];
-  const creates = [];
-  const links = [];
-  const warnings = [];
   const ossMilestones = await readMilestones(ossRepository);
   const commercialMilestones = await readMilestones(hostRepository);
 
@@ -301,24 +296,6 @@ export async function planFreeze(
       }
       release(hotfix, active, [active], milestone, true);
     }
-    const planned = planMilestones({
-      generation: branch,
-      candidate,
-      current,
-      next,
-      releaseVersion,
-      hotfix,
-      differs,
-      ossMilestones,
-      commercialMilestones,
-      ossRepository,
-      hostRepository,
-      milestoneOf,
-    });
-    trackers.push(...planned.trackers);
-    creates.push(...planned.creates);
-    links.push(...planned.links);
-    warnings.push(...planned.warnings);
   }
 
   for (const { generation, branch } of ltsBranchesOf({
@@ -403,10 +380,6 @@ export async function planFreeze(
     oss,
     lts,
     releases: [...releases.values()],
-    trackers,
-    creates,
-    links,
-    warnings,
     problems,
   };
 }
@@ -472,9 +445,6 @@ export async function main() {
     core.info(
       `${entry.branch}: ${entry.current} to ${entry.next}${entry.bump ? "" : " (no commit)"}`,
     );
-  }
-  for (const warning of plan.warnings) {
-    core.warning(warning);
   }
   for (const entry of plan.releases) {
     core.info(

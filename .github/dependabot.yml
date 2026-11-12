@@ -15,13 +15,13 @@ updates:
       - /deploy-artifacts
       - /ensure-artifacts
       - /ensure-dependency-issues
+      - /ensure-milestones
       - /git-identity
       - /load-train
       - /map-train-versions
       - /merge-release
       - /merge-release-branch
       - /name-repositories
-      - /open-milestones
       - /plan-release-branches
       - /pr-build
       - /publish-release-notes
@@ -51,6 +51,7 @@ updates:
       - /copy-milestone-issues
       - /delete-branches
       - /ensure-dependency-issues
+      - /ensure-milestones
       - /freeze-summary
       - /git-identity
       - /list-branches
@@ -59,7 +60,6 @@ updates:
       - /merge-release
       - /merge-tag
       - /name-repositories
-      - /open-milestones
       - /plan-freeze
       - /plan-post-publish
       - /plan-release-branches

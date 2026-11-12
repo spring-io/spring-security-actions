@@ -24,8 +24,8 @@ inputs:
   milestones-file:
     description: "What was done to the milestones that were closed. code-freeze/milestones.json in RUNNER_TEMP by default."
     required: false
-  opened-file:
-    description: "What was done to the milestones of the next cycle. code-freeze/milestones-opened.json in RUNNER_TEMP by default."
+  ensured-file:
+    description: "What ensure-milestones did to the milestones of the cycle (or would do, in a dry run). code-freeze/milestones-ensured.json in RUNNER_TEMP by default."
     required: false
 
 runs:

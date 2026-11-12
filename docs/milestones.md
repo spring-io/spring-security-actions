@@ -9,11 +9,11 @@ The active embargoed branch (`embargoed/active/7.0.x`) is at the version of the 
 | Milestone | Repository | Made by | Closed by |
 |---|---|---|---|
 | `7.0.9` | OSS | the [code freeze](code-freeze.md) before it, or the release workflow, with a title only | the code freeze that releases it |
-| `7.0.9` | commercial | the release workflow (a frozen branch), with the link to the OSS milestone | not closed by the freeze |
+| `7.0.9` | commercial | the code freeze before it (it was the tracker of the next release), with the link to the OSS milestone, or the release workflow | closed by the code freeze before it |
 | `7.0.9.1`, the hotfix | commercial | the code freeze before it, or the release workflow | the code freeze |
 | `7.0.10`, the next release | commercial | the code freeze before it | the code freeze |
 
-A freeze from `7.0.9-SNAPSHOT` to `7.0.10-SNAPSHOT` closes `7.0.9` (OSS), `7.0.9.1` and `7.0.10` (commercial), and makes OSS `7.0.10` and the commercial `7.0.10.1` and `7.0.11`: [the code freeze guide](code-freeze.md#the-milestones-of-a-cycle) has the rules, and what a `.0` version does. The due dates and the release trains are not made by the freeze: they are set by people, and followed by the workflow below.
+A freeze from `7.0.9-SNAPSHOT` to `7.0.10-SNAPSHOT` closes `7.0.9` (OSS), `7.0.9.1` and `7.0.10` (commercial), and makes OSS `7.0.10` and the commercial `7.0.10.1` and `7.0.11`. It does it from the version that the branches have after the bump, `7.0.10-SNAPSHOT`, with the step [ensure-milestones](../ensure-milestones/README.md): the version `7.0.9-SNAPSHOT` gives the same state one release earlier, so the same step checks a project that has not been frozen yet. [The code freeze guide](code-freeze.md#the-milestones-of-a-cycle) has the rules, and what a `.0` version does. The due dates and the release trains are not made by the freeze: they are set by people, and followed by the workflow below.
 
 ## The due date is the release train
 
@@ -132,7 +132,7 @@ Run the caller of the commercial repository from the Actions tab (**Run workflow
 | do it | the same with `dry-run` off |
 | one milestone, and what follows it | `milestone` `7.0.9` (and `repository` for an OSS milestone, `spring-projects/spring-security`), `all` off |
 
-A dry run writes nothing and runs nothing: the summary lists, for each milestone, what it would change (`would change spring-projects/spring-security 7.0.9: description is now: Release Train: 2026.11.19`), which releases would leave a train, and, with `rebuild`, which branches it would build again, and ends with the totals. A real run does the same, and the totals say what was done.
+With `all` the run starts with the step `ensure-milestones`, from the version of `gradle.properties` as the branches are now: it closes the milestones that are done, makes what is missing (a tracker that was never made), and says what is not as it should be. The summary of that step comes first. Then the trains are synced. A dry run writes nothing and runs nothing: the summary lists, for each milestone, what it would change (`would change spring-projects/spring-security 7.0.9: description is now: Release Train: 2026.11.19`), which releases would leave a train, and, with `rebuild`, which branches it would build again, and ends with the totals. A real run does the same, and the totals say what was done.
 
 `all` goes through the open milestones that have a release, in the OSS repository (each with its commercial milestone and its hotfix), and the open commercial milestones of long-term support (those with no OSS milestone, that have a `Release Train:` line or a long-term support branch). Closed milestones, the milestones that track the next release (`7.0.10`), titles that are not the version of a release (`7.0.x`), and an OSS milestone that has no due date and no `Release Train:` line (it has never been in a train, and its commercial milestone may be one that was released long ago) are left out. It knows no previous due date, so a release leaves the train that its description names. It writes the line of a release that the train says has joined, and starts nothing else (with `rebuild` off), so it is safe to run twice.
 

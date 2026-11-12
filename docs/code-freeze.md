@@ -25,8 +25,8 @@ It runs with a **dry run on by default**: it plans, makes the merges and the ver
 4. **Ready**: `release-train-ready.yml` runs on each `release/<version>`, and the freeze waits for it. A release that is ready in the train already is skipped, and its branches are bumped all the same. Ready cannot be undone, so it comes after everything that can be checked, and before any bump is pushed.
 5. **Push**: the commercial repository, then OSS, each in one atomic push without force.
 6. **Milestones**, last, so a failed push leaves them as they were, and a dry run says what it would do and does nothing:
-   - [close-milestones](../close-milestones/README.md) closes the milestone of each release, in the OSS repository for the OSS and frozen releases, and in the commercial one for a hotfix and for long-term support. It closes the **trackers** too: the two commercial milestones that track the fixes of an active branch, the hotfix and the next release (see [the milestones of a cycle](#the-milestones-of-a-cycle)). A milestone with open issues is closed all the same, and the summary has the count. None is deleted, whether or not it has issues.
-   - [open-milestones](../open-milestones/README.md) makes the milestones of the next cycle, and adds the link to the OSS milestone to the commercial one of the next release.
+   - [close-milestones](../close-milestones/README.md) closes the milestone of each release, in the OSS repository for the OSS and frozen releases, and in the commercial one for a hotfix and for long-term support. A milestone with open issues is closed all the same, and the summary has the count. None is deleted, whether or not it has issues.
+   - [ensure-milestones](../ensure-milestones/README.md) makes and closes the milestones of the cycle (the hotfix and the next release that track the fixes of the active branch, and the next OSS release): it reads `version=` of `gradle.properties` on the branches **after the bump**, and decides from that (see [the milestones of a cycle](#the-milestones-of-a-cycle)). The dry run does the same from the versions of the plan.
 
 ### The next version
 
@@ -42,7 +42,7 @@ The release that is made is the open milestone of the version with the earliest 
 
 ### The milestones of a cycle
 
-The active branch is at the version of the release that the frozen branch builds now (`7.0.9-SNAPSHOT` builds `7.0.9`), so its fixes ship twice: as the hotfix of that release (`7.0.9.1`) and in the next release of OSS (`7.0.10`), which is made from the frozen branch once the freeze has fast forwarded it to the active one. Both are milestones of the **commercial** repository, the **trackers**, and the [CVE issues](cve-issues.md) are in them. A freeze from `7.0.9-SNAPSHOT` to `7.0.10-SNAPSHOT`:
+The active branch is at the version of the release that the frozen branch builds now (`7.0.9-SNAPSHOT` builds `7.0.9`), so its fixes ship twice: as the hotfix of that release (`7.0.9.1`) and in the next release of OSS (`7.0.10`), which is made from the frozen branch once the freeze has fast forwarded it to the active one. Both are milestones of the **commercial** repository, the **trackers**, and the [CVE issues](cve-issues.md) are in them. The milestones of the cycle are decided from the version that the branches have **after** the bump, and not from the plan: the step [ensure-milestones](../ensure-milestones/README.md) reads `gradle.properties` once the push is done. The version `7.0.10-SNAPSHOT` gives the state that a freeze from `7.0.9-SNAPSHOT` makes (the release before it is `7.0.9`):
 
 | What | Milestone | Repository |
 |---|---|---|
@@ -56,7 +56,7 @@ The freeze makes the milestones with a title only. A milestone that is there alr
 
 Before the GA of a `.0` version there is no hotfix, and the next milestone, release candidate or GA is planned by people, so **nothing is made in OSS**. Freezing `7.0.0-M1` closes the tracker of the open milestone after it (commercial `7.0.0-RC1`) and makes the tracker of the one after that (commercial `7.0.0`), only if its OSS milestone exists. If there is no open milestone left for `7.0.0`, the summary warns, and the next freeze would fail with `has no open milestone`.
 
-What is expected and not found is a **warning** in the summary, not a failure: a project that has not been through a freeze like this has none of the trackers. The hotfix milestone of a release that is made is still required (see below).
+What is expected and not found is a **warning** in the summary, not a failure. The state is the same before and after the freeze, so the step that the freeze runs also runs by hand, with a dry run, to check a project at any time: see [the milestones of a release](milestones.md#syncing-by-hand-with-a-dry-run). The hotfix milestone of a release that is made is still required (see below).
 
 ### The merges
 
