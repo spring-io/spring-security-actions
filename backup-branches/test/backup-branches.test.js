@@ -115,6 +115,15 @@ describe("backupBranches", () => {
     );
   });
 
+  it("has no background maintenance, whose lock files break the upload", () => {
+    const w = world(["a"]);
+    const { directory } = backup(w, ["a"]);
+    expect(git(directory, "config", "--local", "gc.auto")).toBe("0");
+    expect(git(directory, "config", "--local", "maintenance.auto")).toBe(
+      "false",
+    );
+  });
+
   it("has no credentials in any file of the backup", () => {
     const w = world(["a"]);
     const { directory } = backup(w, ["a"]);

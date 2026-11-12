@@ -31747,6 +31747,10 @@ function exportMerges({ directory, merge, plan, target, dryRun }) {
   const clone = external_node_path_namespaceObject.resolve(directory);
   external_node_fs_namespaceObject.mkdirSync(target, { recursive: true });
   git(target, "init", "-q");
+  // No background maintenance: its lock files come and go while the directory is uploaded as an
+  // artifact, and an upload that lists one that is gone fails.
+  git(target, "config", "gc.auto", "0");
+  git(target, "config", "maintenance.auto", "false");
   git(
     target,
     "fetch",
