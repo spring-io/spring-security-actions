@@ -97,6 +97,10 @@ export function backupBranches({ repository, branches, token, directory }) {
   }
   fs.mkdirSync(directory, { recursive: true });
   git(directory, token, "init", "-q");
+  // No background maintenance: its lock files come and go while the directory is uploaded as an
+  // artifact, and an upload that lists one that is gone fails.
+  git(directory, token, "config", "gc.auto", "0");
+  git(directory, token, "config", "maintenance.auto", "false");
   git(directory, token, "remote", "add", "origin", restoreUrl(repository));
   git(
     directory,

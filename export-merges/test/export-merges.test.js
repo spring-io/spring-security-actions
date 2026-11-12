@@ -115,6 +115,20 @@ describe("exportMerges", () => {
     expect(git(target, "symbolic-ref", "HEAD")).toBe("refs/heads/7.1.x");
   });
 
+  it("has no background maintenance, whose lock files break the upload", () => {
+    const w = world();
+    const target = path.join(w.root, "export");
+    exportMerges({
+      directory: w.clone,
+      merge: w.merge,
+      plan: w.plan,
+      target,
+      dryRun: true,
+    });
+    expect(git(target, "config", "--local", "gc.auto")).toBe("0");
+    expect(git(target, "config", "--local", "maintenance.auto")).toBe("false");
+  });
+
   it("has a README with the table, how to look, and no remote and no push", () => {
     const w = world();
     const target = path.join(w.root, "export");
