@@ -22,6 +22,7 @@ The tag is the release version: `7.1.3`, and not `v7.1.3`. The work is always do
 | 5 | **Export** the merged branches (`export-merges`), and attach them to the run. | not done | a clone with the merged branches, to look at |
 | 6 | **Check, and push** (`push-merges`). | the check, then OSS, then the commercial repository | the check only (`git push --atomic --dry-run`) |
 | 7 | **Delete** the branches (`delete-branches`). | one atomic push | lists |
+| 8 | **Deploy the docs** (`deploy-docs`), **publish the release notes** (`publish-release-notes`) and **update the learn page** (`update-learn-page`): separate jobs that make the release known. | dispatch the docs workflow, create the GitHub release, and add the release to the learn page | **skipped** (the jobs do not run): none of them can be undone |
 
 A step that fails stops the run, so a branch is never deleted while a copy or a merge failed. A copy that is skipped (see below) does not stop it. Every step can be run again: the copy skips what has the comment with the link to its copy, a branch that has the tag is not merged again, and a branch that is gone is not deleted twice.
 

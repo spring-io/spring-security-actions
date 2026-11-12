@@ -36,6 +36,10 @@ name: post-publish
 #   update-learn-page      adds the release to the #learn page: an OSS release through the Spring
 #                          Projects API, and any other (lts, hotfix, internal) by editing
 #                          documentation.json in spring-website-commercial-content
+#
+# These three make a release public and cannot be undone by a dry run, so they run only when the
+# dry run is off (a tag that is pushed, or a run by hand with the dry run unticked): a dry run does
+# not dispatch, publish or edit anything.
 
 on:
   workflow_call:
@@ -197,6 +201,7 @@ jobs:
 
   deploy-docs:
     name: Deploy Docs
+    if: ${{ !inputs.dry-run }}
     runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     permissions:
       actions: write
@@ -206,6 +211,7 @@ jobs:
 
   publish-release-notes:
     name: Publish Release Notes
+    if: ${{ !inputs.dry-run }}
     runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     permissions:
       contents: write
@@ -223,6 +229,7 @@ jobs:
 
   update-learn-page:
     name: Update Learn Page
+    if: ${{ !inputs.dry-run }}
     runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     steps:
       - name: Update Learn Page
