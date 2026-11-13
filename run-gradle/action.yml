@@ -10,11 +10,12 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Add init.gradle
+    - name: Add init scripts
       shell: bash
       run: |
         mkdir -p "$HOME/.gradle/init.d"
         cp "$GITHUB_ACTION_PATH/init.gradle" "$HOME/.gradle/init.d/init.gradle"
+        cp "$GITHUB_ACTION_PATH/usw1-mirrors.gradle" "$HOME/.gradle/init.d/usw1-mirrors.gradle"
         if [ -d "gradle/init.d" ]; then
           cp gradle/init.d/*.gradle "$HOME/.gradle/init.d/"
         fi

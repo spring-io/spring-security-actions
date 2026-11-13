@@ -1,6 +1,6 @@
 # run-gradle
 
-A reusable composite action that runs a Gradle command, installing an `init.gradle` beforehand that makes the Spring commercial release repository available to every project.
+A reusable composite action that runs a Gradle command, installing init scripts beforehand: an `init.gradle` that makes the Spring commercial release repository available to every project, and `usw1-mirrors.gradle` that redirects Maven Central and the Gradle Plugin Portal to the Artifactory mirrors.
 
 ## Caller contract
 
@@ -22,6 +22,19 @@ The action always installs an `init.gradle` into `~/.gradle/init.d` that adds `m
 - `spring-commercial-snapshot` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-dev-local`) — added additionally when the project version ends in `-SNAPSHOT`.
 
 Credentials come from the Gradle project properties `artifactoryUsername`/`artifactoryPassword` — e.g. via the `ORG_GRADLE_PROJECT_artifactoryUsername`/`ORG_GRADLE_PROJECT_artifactoryPassword` environment variable convention — falling back to the `COMMERCIAL_REPO_USERNAME`/`COMMERCIAL_REPO_PASSWORD` environment variables. If neither username nor password is set, the commercial repositories are skipped.
+
+## Artifactory mirrors
+
+The action also installs `usw1-mirrors.gradle` into `~/.gradle/init.d`. It redirects the public repositories to the Spring Artifactory virtual repositories on `usw1.packages.broadcom.com`, for the project and for `buildSrc`:
+
+- Maven Central (`repo.maven.apache.org`, `repo1.maven.org`) goes to `spring-maven-virtual`.
+- The Gradle Plugin Portal (`plugins.gradle.org`) goes to `spring-plugins-gradle-virtual`.
+
+It is active only when the environment variables `COMMERCIAL_REPO_USERNAME` and `COMMERCIAL_REPO_PASSWORD` are both set, and it does nothing otherwise, so a build without them is not affected. When it is active it logs a line, and with `--info` a line for each repository that it redirects. It never logs the credentials. The `releaseChannel` plays no part.
+
+Every other repository (`repo.spring.io`, `shibboleth`, `Node.js`, ...) is left as the build declares it, and so are the repositories to publish to.
+
+To use it on a machine, copy `usw1-mirrors.gradle` to `~/.gradle/init.d/` and export the credentials. `source ~/.commercial-artifactory.sh` sets `COMMERCIAL_ARTIFACTORY_USERNAME` and `COMMERCIAL_ARTIFACTORY_PASSWORD`, so also run `export COMMERCIAL_REPO_USERNAME=$COMMERCIAL_ARTIFACTORY_USERNAME COMMERCIAL_REPO_PASSWORD=$COMMERCIAL_ARTIFACTORY_PASSWORD`.
 
 ## Caller-supplied init scripts
 
