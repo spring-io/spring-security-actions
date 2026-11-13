@@ -30,11 +30,11 @@ The action also installs `usw1-mirrors.gradle` into `~/.gradle/init.d`. It redir
 - Maven Central (`repo.maven.apache.org`, `repo1.maven.org`) goes to `spring-maven-virtual`.
 - The Gradle Plugin Portal (`plugins.gradle.org`) goes to `spring-plugins-gradle-virtual`.
 
-It is active only when the environment variables `COMMERCIAL_REPO_USERNAME` and `COMMERCIAL_REPO_PASSWORD` are both set, and it does nothing otherwise, so a build without them is not affected. When it is active it logs a line, and with `--info` a line for each repository that it redirects. It never logs the credentials. The `releaseChannel` plays no part.
+It is active only when Artifactory credentials are set, and it does nothing otherwise, so a build without them is not affected. The credentials are the ones that `init.gradle` uses: the Gradle properties `artifactoryUsername` and `artifactoryPassword` (for example from the environment variables `ORG_GRADLE_PROJECT_artifactoryUsername` and `ORG_GRADLE_PROJECT_artifactoryPassword`, or `-P`), falling back to the environment variables `COMMERCIAL_REPO_USERNAME` and `COMMERCIAL_REPO_PASSWORD`. With only one of the two, it does nothing. When it is active it logs a line, and with `--info` a line for each repository that it redirects. It never logs the credentials. The `releaseChannel` plays no part.
 
 Every other repository (`repo.spring.io`, `shibboleth`, `Node.js`, ...) is left as the build declares it, and so are the repositories to publish to.
 
-To use it on a machine, copy `usw1-mirrors.gradle` to `~/.gradle/init.d/` and export the credentials. `source ~/.commercial-artifactory.sh` sets `COMMERCIAL_ARTIFACTORY_USERNAME` and `COMMERCIAL_ARTIFACTORY_PASSWORD`, so also run `export COMMERCIAL_REPO_USERNAME=$COMMERCIAL_ARTIFACTORY_USERNAME COMMERCIAL_REPO_PASSWORD=$COMMERCIAL_ARTIFACTORY_PASSWORD`.
+To use it on a machine, copy `usw1-mirrors.gradle` to `~/.gradle/init.d/` and set the credentials. `source ~/.commercial-artifactory.sh` exports `ORG_GRADLE_PROJECT_artifactoryUsername` and `ORG_GRADLE_PROJECT_artifactoryPassword`, which is enough.
 
 ## Caller-supplied init scripts
 

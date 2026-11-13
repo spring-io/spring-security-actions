@@ -3,64 +3,66 @@
  * repositories on usw1.packages.broadcom.com. Applies to the root build, buildSrc and
  * included builds. Every other repository is left as the build declares it.
  *
- * Active only when the COMMERCIAL_REPO_USERNAME and COMMERCIAL_REPO_PASSWORD environment
- * variables are set. Without both it does nothing.
+ * Active only when Artifactory credentials are set: the Gradle properties artifactoryUsername
+ * and artifactoryPassword (for example from the environment variables
+ * ORG_GRADLE_PROJECT_artifactoryUsername and ORG_GRADLE_PROJECT_artifactoryPassword), falling
+ * back to the environment variables COMMERCIAL_REPO_USERNAME and COMMERCIAL_REPO_PASSWORD.
+ * Without both a username and a password it does nothing.
  */
 def artifactoryMavenUrl = "https://usw1.packages.broadcom.com/artifactory/spring-maven-virtual"
 def artifactoryPluginUrl = "https://usw1.packages.broadcom.com/artifactory/spring-plugins-gradle-virtual"
 
 
-def artifactoryUsername = System.getenv("COMMERCIAL_REPO_USERNAME")
-def artifactoryPassword = System.getenv("COMMERCIAL_REPO_PASSWORD")
-
-if (!artifactoryUsername || !artifactoryPassword) {
-    return
-}
-
-logger.lifecycle("usw1-mirrors: COMMERCIAL_REPO_USERNAME and COMMERCIAL_REPO_PASSWORD are set, " +
-        "redirecting Maven Central and the Gradle Plugin Portal to usw1.packages.broadcom.com")
-
-
-def mirrorRepo = { repo ->
-    if (!repo.hasProperty('url')) {
-        return
-    }
-    def originalUrl = repo.url.toString()
-    def targetUrl = null
-
-    // Determine which Artifactory URL to use
-    if (originalUrl.contains("repo.maven.apache.org") || originalUrl.contains("repo1.maven.org")) {
-        targetUrl = artifactoryMavenUrl
-    } else if (originalUrl.contains("plugins.gradle.org")) {
-        targetUrl = artifactoryPluginUrl
-    }
-    if (targetUrl == null) {
-        return
-    }
-
-    logger.info("usw1-mirrors: redirecting repository '${repo.name}' from ${originalUrl} to ${targetUrl}")
-    repo.url = uri(targetUrl)
-
-    repo.credentials {
-        username = artifactoryUsername
-        password = artifactoryPassword
-    }
-}
-
-
 gradle.beforeSettings { settings ->
+    // Gradle properties are only available once there are settings
+    def artifactoryUsername = settings.providers.gradleProperty("artifactoryUsername").orNull ?: System.getenv("COMMERCIAL_REPO_USERNAME")
+    def artifactoryPassword = settings.providers.gradleProperty("artifactoryPassword").orNull ?: System.getenv("COMMERCIAL_REPO_PASSWORD")
+
+    if (!artifactoryUsername || !artifactoryPassword) {
+        return
+    }
+
+    logger.lifecycle("usw1-mirrors: Artifactory credentials are set, " +
+            "redirecting Maven Central and the Gradle Plugin Portal to usw1.packages.broadcom.com")
+
+
+    def mirrorRepo = { repo ->
+        if (!repo.hasProperty('url')) {
+            return
+        }
+        def originalUrl = repo.url.toString()
+        def targetUrl = null
+
+        // Determine which Artifactory URL to use
+        if (originalUrl.contains("repo.maven.apache.org") || originalUrl.contains("repo1.maven.org")) {
+            targetUrl = artifactoryMavenUrl
+        } else if (originalUrl.contains("plugins.gradle.org")) {
+            targetUrl = artifactoryPluginUrl
+        }
+        if (targetUrl == null) {
+            return
+        }
+
+        logger.info("usw1-mirrors: redirecting repository '${repo.name}' from ${originalUrl} to ${targetUrl}")
+        repo.url = uri(targetUrl)
+
+        repo.credentials {
+            username = artifactoryUsername
+            password = artifactoryPassword
+        }
+    }
+
+
     settings.pluginManagement.repositories.all { mirrorRepo(it) }
     settings.dependencyResolutionManagement.repositories.all { mirrorRepo(it) }
-}
 
+    settings.gradle.settingsEvaluated { evaluated ->
+        evaluated.pluginManagement.repositories.all { mirrorRepo(it) }
+        evaluated.dependencyResolutionManagement.repositories.all { mirrorRepo(it) }
+    }
 
-gradle.settingsEvaluated { settings ->
-    settings.pluginManagement.repositories.all { mirrorRepo(it) }
-    settings.dependencyResolutionManagement.repositories.all { mirrorRepo(it) }
-}
-
-
-gradle.allprojects { project ->
-    project.buildscript.repositories.all { mirrorRepo(it) }
-    project.repositories.all { mirrorRepo(it) }
+    settings.gradle.allprojects { project ->
+        project.buildscript.repositories.all { mirrorRepo(it) }
+        project.repositories.all { mirrorRepo(it) }
+    }
 }
