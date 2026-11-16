@@ -73,4 +73,4 @@ npm run build       # formats, and bundles src/ into dist/: commit both
 
 ## Releasing a change of an action
 
-The release workflow calls the actions of this repository at a commit, so a change of an action reaches the callers in three steps: merge the change, change the commit in every `uses:` of `.github/workflows/release-branches.yml` and `.github/workflows/code-freeze.yml` to the commit of the merge (CI checks that they are commits of this repository), and tag the commit of that second change. Callers of the workflow then pin the tag's commit.
+The workflows of this repository call its actions with `$/` (the repository and the commit that is running, with no checkout), so the actions of a workflow are always those of the commit that the workflow is called at. A change of an action reaches the callers in two steps: merge the change, and tag the commit of the merge. Callers of the workflow then pin the tag's commit. CI checks that the workflows use `$/` and not a pin of this repository. `$/` needs a runner of version 2.336.0 or newer, and it is not available on GitHub Enterprise Server.

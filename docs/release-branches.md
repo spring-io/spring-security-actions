@@ -158,7 +158,7 @@ jobs:
 | `release-train-repository` (input) | The release train repository, `owner/repo`. `spring-io/release-train` if it is not given, or empty. |
 | `RELEASE_AUTOMATION_TOKEN` (secret) | The token below. A reusable workflow gets only the secrets that its caller gives it. |
 
-`<ref>` is a tag or a commit of this repository. Pin a commit, as for any action that has access to a token. The workflow calls the actions of this repository at a commit that is written in it, each with a comment that names the tag. That commit is not the one of the workflow: it is the one that the actions were released at, so a caller that pins a commit of the workflow gets exactly the actions that it names.
+`<ref>` is a tag or a commit of this repository. Pin a commit, as for any action that has access to a token. The workflow calls the actions of this repository with `$/`, which is this repository at the commit that is running, so a caller that pins a commit of the workflow gets exactly the actions of that commit. `$/` needs a runner of version 2.336.0 or newer.
 
 The workflow runs from the pushed branch, so the workflow of the project must be on every embargoed branch: it comes with the merges forward.
 
