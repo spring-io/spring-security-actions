@@ -60,6 +60,14 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 
 [`sync-milestone.yml`](.github/workflows/sync-milestone.yml) is a reusable workflow that runs when a milestone is edited, in the OSS repository or in the commercial one: the release joins the release train of the due date of its milestone (and leaves the one it was in), and the milestones of the commercial repository follow. [docs/milestones.md](docs/milestones.md) is the guide, with the two callers.
 
+The workflows of the CI and of the announcement of a release were moved here from `spring-security-release-tools`, with the same inputs and secrets. They are reusable workflows, and their steps use the actions of this repository with `$/`:
+
+- [`ci-build.yml`](.github/workflows/ci-build.yml) builds the project with the action `build` and keeps the local repository of the build as an artifact.
+- [`ci-deploy-artifacts.yml`](.github/workflows/ci-deploy-artifacts.yml) takes that local repository and makes sure that its artifacts are in Artifactory (`ensure-artifacts`).
+- [`ci-deploy-schema.yml`](.github/workflows/ci-deploy-schema.yml) runs the Gradle task `deploySchema`.
+- [`release-announcements-stage.yml`](.github/workflows/release-announcements-stage.yml) is run when a release is staged: it checks the support window of the version and publishes its release notes (`publish-release-notes`).
+- [`release-announcements-publish.yml`](.github/workflows/release-announcements-publish.yml) is run when a release is public: it checks the support window, runs the workflow `deploy-docs.yml` of the project on `docs-build`, closes the milestone of the release, schedules the next one and announces the release on Google Chat.
+
 ## Working on an action
 
 ```shell
