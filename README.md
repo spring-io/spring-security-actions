@@ -60,6 +60,14 @@ They are written in JavaScript (Node 24), and every one of them is **self contai
 
 [`sync-milestone.yml`](.github/workflows/sync-milestone.yml) is a reusable workflow that runs when a milestone is edited, in the OSS repository or in the commercial one: the release joins the release train of the due date of its milestone (and leaves the one it was in), and the milestones of the commercial repository follow. [docs/milestones.md](docs/milestones.md) is the guide, with the two callers.
 
+The workflows of the CI and of the announcement of a release were moved here from `spring-security-release-tools`, with the same inputs and secrets. They are reusable workflows, and their steps use the actions of this repository with `$/`:
+
+- [`ci-build.yml`](.github/workflows/ci-build.yml) builds the project with the action `build` and keeps the local repository of the build as an artifact.
+- [`ci-deploy-artifacts.yml`](.github/workflows/ci-deploy-artifacts.yml) takes that local repository and makes sure that its artifacts are in Artifactory (`ensure-artifacts`).
+- [`ci-deploy-schema.yml`](.github/workflows/ci-deploy-schema.yml) runs the Gradle task `deploySchema`.
+- [`release-announcements-stage.yml`](.github/workflows/release-announcements-stage.yml) is run when a release is staged: it checks the support window of the version and publishes its release notes (`publish-release-notes`).
+- [`release-announcements-publish.yml`](.github/workflows/release-announcements-publish.yml) is run when a release is public: it checks the support window, runs the workflow `deploy-docs.yml` of the project on `docs-build`, closes the milestone of the release, schedules the next one and announces the release on Google Chat.
+
 ## Working on an action
 
 ```shell
@@ -73,4 +81,4 @@ npm run build       # formats, and bundles src/ into dist/: commit both
 
 ## Releasing a change of an action
 
-The release workflow calls the actions of this repository at a commit, so a change of an action reaches the callers in three steps: merge the change, change the commit in every `uses:` of `.github/workflows/release-branches.yml` and `.github/workflows/code-freeze.yml` to the commit of the merge (CI checks that they are commits of this repository), and tag the commit of that second change. Callers of the workflow then pin the tag's commit.
+The workflows of this repository call its actions with `$/` (the repository and the commit that is running, with no checkout), so the actions of a workflow are always those of the commit that the workflow is called at. A change of an action reaches the callers in two steps: merge the change, and tag the commit of the merge. Callers of the workflow then pin the tag's commit. CI checks that the workflows use `$/` and not a pin of this repository. `$/` needs a runner of version 2.336.0 or newer, and it is not available on GitHub Enterprise Server.

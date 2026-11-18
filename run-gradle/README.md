@@ -1,6 +1,6 @@
 # run-gradle
 
-A reusable composite action that runs a Gradle command, installing init scripts beforehand: an `init.gradle` that makes the Spring commercial release repository available to every project, and `usw1-mirrors.gradle` that redirects Maven Central and the Gradle Plugin Portal to the Artifactory mirrors.
+A reusable composite action that runs a Gradle command, installing init scripts beforehand: `commercial-repositories.gradle`, which adds the Spring commercial Maven repositories after the repositories that the build declares, and `usw1-mirrors.gradle`, which redirects Maven Central and the Gradle Plugin Portal to the Artifactory mirrors.
 
 ## Caller contract
 
@@ -16,12 +16,32 @@ A reusable composite action that runs a Gradle command, installing init scripts 
 
 ## Artifact repository
 
-The action always installs an `init.gradle` into `~/.gradle/init.d` that adds `mavenCentral()` and conditionally adds the Spring commercial Maven repositories to every subproject:
+The action always installs `commercial-repositories.gradle` into `~/.gradle/init.d`. When Artifactory credentials are set, it adds the Spring commercial Maven repositories **after** the repositories that the build declares. The build keeps its own order, with its own `mavenCentral()` first and only once, and the commercial repositories are asked only for what the ones before them do not have. The script does not add `mavenCentral()` itself.
 
-- `spring-commercial-release` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-prod-local`) — added whenever credentials are present.
-- `spring-commercial-snapshot` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-dev-local`) — added additionally when the project version ends in `-SNAPSHOT`.
+The repositories, all with the same credentials:
 
-Credentials come from the Gradle project properties `artifactoryUsername`/`artifactoryPassword` — e.g. via the `ORG_GRADLE_PROJECT_artifactoryUsername`/`ORG_GRADLE_PROJECT_artifactoryPassword` environment variable convention — falling back to the `COMMERCIAL_REPO_USERNAME`/`COMMERCIAL_REPO_PASSWORD` environment variables. If neither username nor password is set, the commercial repositories are skipped.
+- `spring-commercial-release` (`https://repo.spring.io/artifactory/spring-commercial-release-remote`).
+- `spring-enterprise-release` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-prod-local`).
+- `spring-commercial-snapshot` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-dev-local`), added additionally when the version ends in `-SNAPSHOT`.
+
+Credentials come from the Gradle properties `artifactoryUsername`/`artifactoryPassword` (for example via the `ORG_GRADLE_PROJECT_artifactoryUsername`/`ORG_GRADLE_PROJECT_artifactoryPassword` environment variable convention), falling back to the `COMMERCIAL_REPO_USERNAME`/`COMMERCIAL_REPO_PASSWORD` environment variables. With both a username and a password, every repository above is added. Without both, none is. Either way the script logs one line for each build (the root build, `buildSrc` and included builds), prefixed `commercial-repositories:`, and it never logs the credentials.
+
+Where they are added, once the settings have been evaluated, so after the repositories that `settings.gradle` declares:
+
+| Where | Rule |
+|-------|------|
+| Plugin repositories of the settings (`pluginManagement`) | Appended. If the build declares none, the Gradle Plugin Portal is added first, because it is the default only while there are none. |
+| Repositories of the settings (`dependencyResolutionManagement`) | Appended. |
+| Repositories of each project | Appended once the project has been evaluated, only if the repositories mode of the settings is `PREFER_PROJECT` (the default) and the project declares repositories itself. A project that uses the repositories of the settings is left on them. Nothing is added to a project when the mode is `PREFER_SETTINGS` or `FAIL_ON_PROJECT_REPOS`. |
+
+`buildSrc` and included builds get the same.
+
+Not covered:
+
+- The `buildscript` repositories of a project, which are used as soon as the `buildscript` block ends, and the `plugins {}` block of `settings.gradle`, which is resolved while `settings.gradle` is evaluated. `usw1-mirrors.gradle` redirects the plugin portal and Maven Central there.
+- A configuration that is resolved while a project is configured, before it has been evaluated, does not see these repositories.
+- Repositories that a plugin adds in an `afterEvaluate` of its own come after these.
+- A build that does not run through this action, for example one on a developer's machine, gets these repositories only if the script is in `~/.gradle/init.d` and the credentials are set.
 
 ## Artifactory mirrors
 
@@ -30,18 +50,18 @@ The action also installs `usw1-mirrors.gradle` into `~/.gradle/init.d`. It redir
 - Maven Central (`repo.maven.apache.org`, `repo1.maven.org`) goes to `spring-maven-virtual`.
 - The Gradle Plugin Portal (`plugins.gradle.org`) goes to `spring-plugins-gradle-virtual`.
 
-It is active only when Artifactory credentials are set, and it does nothing otherwise, so a build without them is not affected. The credentials are the ones that `init.gradle` uses: the Gradle properties `artifactoryUsername` and `artifactoryPassword` (for example from the environment variables `ORG_GRADLE_PROJECT_artifactoryUsername` and `ORG_GRADLE_PROJECT_artifactoryPassword`, or `-P`), falling back to the environment variables `COMMERCIAL_REPO_USERNAME` and `COMMERCIAL_REPO_PASSWORD`. With only one of the two, it does nothing. When it is active it logs a line, and with `--info` a line for each repository that it redirects. It never logs the credentials. The `releaseChannel` plays no part.
+It is active only when Artifactory credentials are set, and it does nothing otherwise, so a build without them is not affected. The credentials are the ones that `commercial-repositories.gradle` uses: the Gradle properties `artifactoryUsername` and `artifactoryPassword` (for example from the environment variables `ORG_GRADLE_PROJECT_artifactoryUsername` and `ORG_GRADLE_PROJECT_artifactoryPassword`, or `-P`), falling back to the environment variables `COMMERCIAL_REPO_USERNAME` and `COMMERCIAL_REPO_PASSWORD`. With only one of the two, it does nothing. When it is active it logs a line, and with `--info` a line for each repository that it redirects. It never logs the credentials. The `releaseChannel` plays no part.
 
 Every other repository (`repo.spring.io`, `shibboleth`, `Node.js`, ...) is left as the build declares it, and so are the repositories to publish to.
 
-To use it on a machine, copy `usw1-mirrors.gradle` to `~/.gradle/init.d/` and set the credentials. `source ~/.commercial-artifactory.sh` exports `ORG_GRADLE_PROJECT_artifactoryUsername` and `ORG_GRADLE_PROJECT_artifactoryPassword`, which is enough.
+To use them on a machine, copy `commercial-repositories.gradle` and `usw1-mirrors.gradle` to `~/.gradle/init.d/` and set the credentials. `source ~/.commercial-artifactory.sh` exports `ORG_GRADLE_PROJECT_artifactoryUsername` and `ORG_GRADLE_PROJECT_artifactoryPassword`, which is enough.
 
 ## Caller-supplied init scripts
 
-If the repository being built has a `gradle/init.d` directory at its root, every `*.gradle` file in it is copied into `~/.gradle/init.d` alongside the action's own bundled `init.gradle`. This lets a caller add its own init scripts without duplicating the `mkdir`/`cp` logic this action already performs.
+If the repository being built has a `gradle/init.d` directory at its root, every `*.gradle` file in it is copied into `~/.gradle/init.d` alongside the action's own bundled `commercial-repositories.gradle`. This lets a caller add its own init scripts without duplicating the `mkdir`/`cp` logic this action already performs.
 
 - The directory is optional; if it doesn't exist, nothing extra happens.
-- A caller file literally named `init.gradle` overrides this action's bundled one, since the caller's directory is copied after it.
+- A caller file literally named `commercial-repositories.gradle` overrides this action's bundled one, since the caller's directory is copied after it.
 
 ## Example
 
