@@ -1,6 +1,6 @@
 # run-gradle
 
-A reusable composite action that runs a Gradle command, installing init scripts beforehand: an `init.gradle` that makes the Spring commercial release repository available to every project, and `usw1-mirrors.gradle` that redirects Maven Central and the Gradle Plugin Portal to the Artifactory mirrors.
+A reusable composite action that runs a Gradle command, installing init scripts beforehand: an `commercial-repositories.gradle` that makes the Spring commercial release repository available to every project, and `usw1-mirrors.gradle` that redirects Maven Central and the Gradle Plugin Portal to the Artifactory mirrors.
 
 ## Caller contract
 
@@ -16,7 +16,7 @@ A reusable composite action that runs a Gradle command, installing init scripts 
 
 ## Artifact repository
 
-The action always installs an `init.gradle` into `~/.gradle/init.d` that adds `mavenCentral()` and conditionally adds the Spring commercial Maven repositories to every subproject:
+The action always installs an `commercial-repositories.gradle` into `~/.gradle/init.d` that adds `mavenCentral()` and conditionally adds the Spring commercial Maven repositories to every subproject:
 
 - `spring-commercial-release` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-prod-local`) — added whenever credentials are present.
 - `spring-commercial-snapshot` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-dev-local`) — added additionally when the project version ends in `-SNAPSHOT`.
@@ -30,7 +30,7 @@ The action also installs `usw1-mirrors.gradle` into `~/.gradle/init.d`. It redir
 - Maven Central (`repo.maven.apache.org`, `repo1.maven.org`) goes to `spring-maven-virtual`.
 - The Gradle Plugin Portal (`plugins.gradle.org`) goes to `spring-plugins-gradle-virtual`.
 
-It is active only when Artifactory credentials are set, and it does nothing otherwise, so a build without them is not affected. The credentials are the ones that `init.gradle` uses: the Gradle properties `artifactoryUsername` and `artifactoryPassword` (for example from the environment variables `ORG_GRADLE_PROJECT_artifactoryUsername` and `ORG_GRADLE_PROJECT_artifactoryPassword`, or `-P`), falling back to the environment variables `COMMERCIAL_REPO_USERNAME` and `COMMERCIAL_REPO_PASSWORD`. With only one of the two, it does nothing. When it is active it logs a line, and with `--info` a line for each repository that it redirects. It never logs the credentials. The `releaseChannel` plays no part.
+It is active only when Artifactory credentials are set, and it does nothing otherwise, so a build without them is not affected. The credentials are the ones that `commercial-repositories.gradle` uses: the Gradle properties `artifactoryUsername` and `artifactoryPassword` (for example from the environment variables `ORG_GRADLE_PROJECT_artifactoryUsername` and `ORG_GRADLE_PROJECT_artifactoryPassword`, or `-P`), falling back to the environment variables `COMMERCIAL_REPO_USERNAME` and `COMMERCIAL_REPO_PASSWORD`. With only one of the two, it does nothing. When it is active it logs a line, and with `--info` a line for each repository that it redirects. It never logs the credentials. The `releaseChannel` plays no part.
 
 Every other repository (`repo.spring.io`, `shibboleth`, `Node.js`, ...) is left as the build declares it, and so are the repositories to publish to.
 
@@ -38,10 +38,10 @@ To use it on a machine, copy `usw1-mirrors.gradle` to `~/.gradle/init.d/` and se
 
 ## Caller-supplied init scripts
 
-If the repository being built has a `gradle/init.d` directory at its root, every `*.gradle` file in it is copied into `~/.gradle/init.d` alongside the action's own bundled `init.gradle`. This lets a caller add its own init scripts without duplicating the `mkdir`/`cp` logic this action already performs.
+If the repository being built has a `gradle/init.d` directory at its root, every `*.gradle` file in it is copied into `~/.gradle/init.d` alongside the action's own bundled `commercial-repositories.gradle`. This lets a caller add its own init scripts without duplicating the `mkdir`/`cp` logic this action already performs.
 
 - The directory is optional; if it doesn't exist, nothing extra happens.
-- A caller file literally named `init.gradle` overrides this action's bundled one, since the caller's directory is copied after it.
+- A caller file literally named `commercial-repositories.gradle` overrides this action's bundled one, since the caller's directory is copied after it.
 
 ## Example
 

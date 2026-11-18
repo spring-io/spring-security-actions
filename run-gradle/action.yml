@@ -14,7 +14,7 @@ runs:
       shell: bash
       run: |
         mkdir -p "$HOME/.gradle/init.d"
-        cp "$GITHUB_ACTION_PATH/init.gradle" "$HOME/.gradle/init.d/init.gradle"
+        cp "$GITHUB_ACTION_PATH/commercial-repositories.gradle" "$HOME/.gradle/init.d/commercial-repositories.gradle"
         cp "$GITHUB_ACTION_PATH/usw1-mirrors.gradle" "$HOME/.gradle/init.d/usw1-mirrors.gradle"
         if [ -d "gradle/init.d" ]; then
           cp gradle/init.d/*.gradle "$HOME/.gradle/init.d/"
