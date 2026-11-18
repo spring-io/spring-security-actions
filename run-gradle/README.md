@@ -41,7 +41,7 @@ Not covered:
 - The `buildscript` repositories of a project, which are used as soon as the `buildscript` block ends, and the `plugins {}` block of `settings.gradle`, which is resolved while `settings.gradle` is evaluated. `usw1-mirrors.gradle` redirects the plugin portal and Maven Central there.
 - A configuration that is resolved while a project is configured, before it has been evaluated, does not see these repositories.
 - Repositories that a plugin adds in an `afterEvaluate` of its own come after these.
-- A build that does not run through this action, for example one on a developer's machine, gets these repositories only if the script is in `~/.gradle/init.d` and the credentials are set.
+- A build that does not run through this action, for example one on a developer's machine, gets these repositories only if the script is applied and the credentials are set, see [Building with the commercial repositories locally](../docs/local-init-scripts.md).
 
 ## Artifactory mirrors
 
@@ -54,7 +54,7 @@ It is active only when Artifactory credentials are set, and it does nothing othe
 
 Every other repository (`repo.spring.io`, `shibboleth`, `Node.js`, ...) is left as the build declares it, and so are the repositories to publish to.
 
-To use them on a machine, copy `commercial-repositories.gradle` and `usw1-mirrors.gradle` to `~/.gradle/init.d/` and set the credentials. `source ~/.commercial-artifactory.sh` exports `ORG_GRADLE_PROJECT_artifactoryUsername` and `ORG_GRADLE_PROJECT_artifactoryPassword`, which is enough.
+To use them on a machine, see [Building with the commercial repositories locally](../docs/local-init-scripts.md).
 
 ## Caller-supplied init scripts
 
