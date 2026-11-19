@@ -32,7 +32,7 @@ Where they are added, once the settings have been evaluated, so after the reposi
 |-------|------|
 | Plugin repositories of the settings (`pluginManagement`) | Appended. If the build declares none, the Gradle Plugin Portal is added first, because it is the default only while there are none. |
 | Repositories of the settings (`dependencyResolutionManagement`) | Appended. |
-| Repositories of each project | Appended once the project has been evaluated, only if the repositories mode of the settings is `PREFER_PROJECT` (the default) and the project declares repositories itself. A project that uses the repositories of the settings is left on them. Nothing is added to a project when the mode is `PREFER_SETTINGS` or `FAIL_ON_PROJECT_REPOS`. |
+| Repositories of each project | Appended once the project has been evaluated, after the `afterEvaluate` callbacks of the build and of its plugins have run, only if the repositories mode of the settings is `PREFER_PROJECT` (the default) and the project has repositories by then, its own or a plugin's. A project that uses the repositories of the settings is left on them. Nothing is added to a project when the mode is `PREFER_SETTINGS` or `FAIL_ON_PROJECT_REPOS`. |
 
 `buildSrc` and included builds get the same.
 
@@ -40,7 +40,6 @@ Not covered:
 
 - The `buildscript` repositories of a project, which are used as soon as the `buildscript` block ends, and the `plugins {}` block of `settings.gradle`, which is resolved while `settings.gradle` is evaluated. `usw1-mirrors.gradle` redirects the plugin portal and Maven Central there.
 - A configuration that is resolved while a project is configured, before it has been evaluated, does not see these repositories.
-- Repositories that a plugin adds in an `afterEvaluate` of its own come after these.
 - A build that does not run through this action, for example one on a developer's machine, gets these repositories only if the script is applied and the credentials are set, see [Building with the commercial repositories locally](../docs/local-init-scripts.md).
 
 ## Artifactory mirrors

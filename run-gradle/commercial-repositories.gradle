@@ -16,16 +16,19 @@
  *  - the plugin repositories of the settings (pluginManagement), with the Gradle Plugin
  *    Portal first if the build declares none, as it is the default only while there are none;
  *  - the repositories of the settings (dependencyResolutionManagement);
- *  - the repositories of each project, once it has been evaluated, only if the repositories
- *    mode of the settings is PREFER_PROJECT and the project declares repositories itself. A
- *    project that uses the repositories of the settings is left on them, and none is added
- *    to a project when the settings prefer their own or reject the ones of a project.
+ *  - the repositories of each project, once it has been evaluated, after the afterEvaluate
+ *    callbacks of the build and of its plugins have run (so after the repositories that a
+ *    plugin adds in an afterEvaluate of its own), only if the repositories mode of the
+ *    settings is PREFER_PROJECT and the project has repositories by then, its own or a
+ *    plugin's. A project that uses the repositories of the settings is left on them, and
+ *    none is added to a project when the settings prefer their own or reject the ones of a
+ *    project.
  *
  * Not covered: the buildscript repositories of a project, which are used as soon as the
  * buildscript block ends, and the plugins block of settings.gradle, which is resolved while
  * settings.gradle is evaluated. usw1-mirrors.gradle redirects the plugin portal and Maven
- * Central there. Repositories that a plugin adds in an afterEvaluate of its own come after
- * the ones of this script.
+ * Central there. A configuration that is resolved while a project is configured, before it
+ * has been evaluated, does not see these repositories.
  */
 def logPrefix = "commercial-repositories:"
 
@@ -86,9 +89,15 @@ gradle.settingsEvaluated { settings ->
 	if (dependencyResolution.repositoriesMode.get().name() == "PREFER_PROJECT") {
 		settings.gradle.allprojects { project ->
 			project.afterEvaluate {
-				if (!project.repositories.isEmpty()) {
-					addCommercialRepositories(project.repositories, repoUsername, repoPassword,
-							"${project.version}".endsWith("-SNAPSHOT"))
+				// The callbacks run in the order they were added, and this one was added before
+				// the ones of the build and its plugins. Adding another one here puts it after
+				// them, so a plugin that adds its repositories in an afterEvaluate of its own,
+				// such as SpringRepositoryPlugin, has added them by the time this one runs.
+				project.afterEvaluate {
+					if (!project.repositories.isEmpty()) {
+						addCommercialRepositories(project.repositories, repoUsername, repoPassword,
+								"${project.version}".endsWith("-SNAPSHOT"))
+					}
 				}
 			}
 		}
