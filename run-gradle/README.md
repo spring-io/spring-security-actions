@@ -16,15 +16,15 @@ A reusable composite action that runs a Gradle command, installing init scripts 
 
 ## Artifact repository
 
-The action always installs `commercial-repositories.gradle` into `~/.gradle/init.d`. When Artifactory credentials are set, it adds the Spring commercial Maven repositories **after** the repositories that the build declares. The build keeps its own order, with its own `mavenCentral()` first and only once, and the commercial repositories are asked only for what the ones before them do not have. The script does not add `mavenCentral()` itself.
+The action always installs `commercial-repositories.gradle` into `~/.gradle/init.d`. When credentials are set, it adds the Spring commercial Maven repositories **after** the repositories that the build declares. The build keeps its own order, with its own `mavenCentral()` first and only once, and the commercial repositories are asked only for what the ones before them do not have. The script does not add `mavenCentral()` itself.
 
-The repositories, all with the same credentials:
+The repositories, in two groups that are each added only with their own credentials:
 
-- `spring-commercial-release` (`https://repo.spring.io/artifactory/spring-commercial-release-remote`).
-- `spring-enterprise-release` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-prod-local`).
-- `spring-commercial-snapshot` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-dev-local`), added additionally when the version ends in `-SNAPSHOT`.
+- With the `REPO_SPRING_IO_USERNAME` and `REPO_SPRING_IO_PASSWORD` environment variables: `spring-commercial-release` (`https://repo.spring.io/artifactory/spring-commercial-release-remote`), and for a snapshot version `spring-commercial-snapshot-remote` (`https://repo.spring.io/artifactory/spring-commercial-snapshot-remote`). Both are skipped unless both variables are set.
+- With the usw1 credentials below: `spring-enterprise-release` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-prod-local`).
+- With the usw1 credentials below, for a snapshot version: `spring-commercial-snapshot` (`https://usw1.packages.broadcom.com/spring-enterprise-maven-dev-local`).
 
-Credentials come from the Gradle properties `artifactoryUsername`/`artifactoryPassword` (for example via the `ORG_GRADLE_PROJECT_artifactoryUsername`/`ORG_GRADLE_PROJECT_artifactoryPassword` environment variable convention), falling back to the `COMMERCIAL_REPO_USERNAME`/`COMMERCIAL_REPO_PASSWORD` environment variables. With both a username and a password, every repository above is added. Without both, none is. Either way the script logs one line for each build (the root build, `buildSrc` and included builds), prefixed `commercial-repositories:`, and it never logs the credentials.
+The usw1 credentials come from the Gradle properties `artifactoryUsername`/`artifactoryPassword` (for example via the `ORG_GRADLE_PROJECT_artifactoryUsername`/`ORG_GRADLE_PROJECT_artifactoryPassword` environment variable convention), falling back to the `COMMERCIAL_REPO_USERNAME`/`COMMERCIAL_REPO_PASSWORD` environment variables. The two groups are independent: either one can be used without the other, and with neither nothing is added. Either way the script logs one line for each build (the root build, `buildSrc` and included builds), prefixed `commercial-repositories:`, and it never logs the credentials.
 
 Where they are added, once the settings have been evaluated, so after the repositories that `settings.gradle` declares:
 

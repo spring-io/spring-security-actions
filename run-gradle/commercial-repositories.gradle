@@ -3,13 +3,17 @@
  * declares, so the build keeps its own order (its mavenCentral() first, and only once) and
  * these are asked only for what the repositories before them do not have.
  *
- * Active only when Artifactory credentials are set: the Gradle properties artifactoryUsername
- * and artifactoryPassword (for example from the environment variables
- * ORG_GRADLE_PROJECT_artifactoryUsername and ORG_GRADLE_PROJECT_artifactoryPassword), falling
- * back to the environment variables COMMERCIAL_REPO_USERNAME and COMMERCIAL_REPO_PASSWORD.
- * With both a username and a password, every repository below is added, with those
- * credentials. Without both, nothing is added. Either way a line is logged, once for each
- * build (the root build, buildSrc and included builds), and it never has the credentials.
+ * Two independent groups, each added only when its own credentials are set:
+ *  - usw1 (spring-enterprise-release, and spring-commercial-snapshot for a snapshot version):
+ *    the Gradle properties artifactoryUsername and artifactoryPassword (for example from the
+ *    environment variables ORG_GRADLE_PROJECT_artifactoryUsername and
+ *    ORG_GRADLE_PROJECT_artifactoryPassword), falling back to the environment variables
+ *    COMMERCIAL_REPO_USERNAME and COMMERCIAL_REPO_PASSWORD;
+ *  - repo.spring.io (spring-commercial-release, and spring-commercial-snapshot-remote for a
+ *    snapshot version): the environment variables REPO_SPRING_IO_USERNAME and
+ *    REPO_SPRING_IO_PASSWORD.
+ * With neither group, nothing is added. Either way a line is logged, once for each build (the
+ * root build, buildSrc and included builds), and it never has the credentials.
  *
  * Where they are added, once the settings have been evaluated, so after the repositories
  * that settings.gradle declares:
@@ -32,30 +36,47 @@
  */
 def logPrefix = "commercial-repositories:"
 
-def addCommercialRepositories = { repositories, repoUsername, repoPassword, snapshot ->
-	repositories.maven {
-		name = "spring-commercial-release"
-		url = uri("https://repo.spring.io/artifactory/spring-commercial-release-remote")
-		credentials {
-			username = repoUsername
-			password = repoPassword
-		}
-	}
-	repositories.maven {
-		name = "spring-enterprise-release"
-		url = uri("https://usw1.packages.broadcom.com/spring-enterprise-maven-prod-local")
-		credentials {
-			username = repoUsername
-			password = repoPassword
-		}
-	}
-	if (snapshot) {
+// usw1 and remote are each either null or [username:, password:]. Each group is added only
+// with its own credentials, independently of the other. repo.spring.io answers 401 for
+// everything without credentials, which fails the resolution, so it is never added without.
+def addCommercialRepositories = { repositories, usw1, remote, snapshot ->
+	if (remote) {
 		repositories.maven {
-			name = "spring-commercial-snapshot"
-			url = uri("https://usw1.packages.broadcom.com/spring-enterprise-maven-dev-local")
+			name = "spring-commercial-release"
+			url = uri("https://repo.spring.io/artifactory/spring-commercial-release-remote")
 			credentials {
-				username = repoUsername
-				password = repoPassword
+				username = remote.username
+				password = remote.password
+			}
+		}
+		if (snapshot) {
+			repositories.maven {
+				name = "spring-commercial-snapshot-remote"
+				url = uri("https://repo.spring.io/artifactory/spring-commercial-snapshot-remote")
+				credentials {
+					username = remote.username
+					password = remote.password
+				}
+			}
+		}
+	}
+	if (usw1) {
+		repositories.maven {
+			name = "spring-enterprise-release"
+			url = uri("https://usw1.packages.broadcom.com/spring-enterprise-maven-prod-local")
+			credentials {
+				username = usw1.username
+				password = usw1.password
+			}
+		}
+		if (snapshot) {
+			repositories.maven {
+				name = "spring-commercial-snapshot"
+				url = uri("https://usw1.packages.broadcom.com/spring-enterprise-maven-dev-local")
+				credentials {
+					username = usw1.username
+					password = usw1.password
+				}
 			}
 		}
 	}
@@ -63,28 +84,33 @@ def addCommercialRepositories = { repositories, repoUsername, repoPassword, snap
 
 gradle.settingsEvaluated { settings ->
 	// Gradle properties are only available once there are settings
-	def repoUsername = settings.providers.gradleProperty("artifactoryUsername").orNull ?: System.getenv("COMMERCIAL_REPO_USERNAME")
-	def repoPassword = settings.providers.gradleProperty("artifactoryPassword").orNull ?: System.getenv("COMMERCIAL_REPO_PASSWORD")
+	def usw1Username = settings.providers.gradleProperty("artifactoryUsername").orNull ?: System.getenv("COMMERCIAL_REPO_USERNAME")
+	def usw1Password = settings.providers.gradleProperty("artifactoryPassword").orNull ?: System.getenv("COMMERCIAL_REPO_PASSWORD")
+	def remoteUsername = System.getenv("REPO_SPRING_IO_USERNAME")
+	def remotePassword = System.getenv("REPO_SPRING_IO_PASSWORD")
+	def usw1 = (usw1Username && usw1Password) ? [username: usw1Username, password: usw1Password] : null
+	def remote = (remoteUsername && remotePassword) ? [username: remoteUsername, password: remotePassword] : null
 
-	if (!repoUsername || !repoPassword) {
+	if (!usw1 && !remote) {
 		logger.lifecycle("${logPrefix} Artifactory credentials are not set, " +
 				"not adding the Spring commercial repositories")
 		return
 	}
 
-	logger.lifecycle("${logPrefix} Artifactory credentials are set, " +
-			"adding the Spring commercial repositories after the repositories of the build")
+	logger.lifecycle("${logPrefix} Adding the Spring commercial repositories after the repositories " +
+			"of the build (usw1: ${usw1 ? 'credentials set' : 'credentials not set, skipped'}, " +
+			"repo.spring.io: ${remote ? 'credentials set' : 'credentials not set, skipped'})")
 
 	def pluginRepositories = settings.pluginManagement.repositories
 	if (pluginRepositories.isEmpty()) {
 		pluginRepositories.gradlePluginPortal()
 	}
-	addCommercialRepositories(pluginRepositories, repoUsername, repoPassword, false)
+	addCommercialRepositories(pluginRepositories, usw1, remote, false)
 
 	def settingsVersion = settings.providers.gradleProperty("version").orNull
 	def settingsSnapshot = settingsVersion != null && settingsVersion.endsWith("-SNAPSHOT")
 	def dependencyResolution = settings.dependencyResolutionManagement
-	addCommercialRepositories(dependencyResolution.repositories, repoUsername, repoPassword, settingsSnapshot)
+	addCommercialRepositories(dependencyResolution.repositories, usw1, remote, settingsSnapshot)
 
 	if (dependencyResolution.repositoriesMode.get().name() == "PREFER_PROJECT") {
 		settings.gradle.allprojects { project ->
@@ -95,7 +121,7 @@ gradle.settingsEvaluated { settings ->
 				// such as SpringRepositoryPlugin, has added them by the time this one runs.
 				project.afterEvaluate {
 					if (!project.repositories.isEmpty()) {
-						addCommercialRepositories(project.repositories, repoUsername, repoPassword,
+						addCommercialRepositories(project.repositories, usw1, remote,
 								"${project.version}".endsWith("-SNAPSHOT"))
 					}
 				}
