@@ -5,13 +5,18 @@ on:
     branches:
       - "main"
       - "*.x"
-      - "embargoed/**"
+      - "embargoed/active/**"
+      - "embargoed/frozen/**"
+      - "embarged/lts/**"
   schedule:
     - cron: '17 10 * * *' # Once per day at 10:17am UTC
   workflow_dispatch: # Manual trigger
 
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   setup:
@@ -27,6 +32,8 @@ jobs:
       publishing-password: ${{ steps.environment.outputs.publishing-password }}
     steps:
       - uses: actions/checkout
+        with:
+          persist-credentials: false
       - id: environment
         name: Compute Build Environment
         uses: spring-io/spring-security-actions/compute-build-environment

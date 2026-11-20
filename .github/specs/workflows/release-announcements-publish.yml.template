@@ -50,4 +50,4 @@ jobs:
     with:
       version: ${{ inputs.version }}
     secrets:
-      SPRING_RELEASE_GCHAT_WEBHOOK_URL: ${{ secrets.SPRING_RELEASE_GCHAT_WEBHOOK_URL }}
+      website-token: ${{ secrets.SPRING_RELEASE_GCHAT_WEBHOOK_URL }}

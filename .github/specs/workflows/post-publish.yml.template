@@ -41,13 +41,16 @@ run-name: "${{ inputs.tag || github.ref_name }}: Post Publish${{ github.event_na
 # publish-release-notes creates the GitHub release), and a called workflow cannot be given more
 # than its caller has: with less, the run fails at startup.
 permissions:
-  actions: write
-  contents: write
   issues: read
   pull-requests: read
 
 jobs:
   post-publish:
+    permissions:
+      actions: write
+      contents: write
+      issues: read
+      pull-requests: read
     name: Post publish
     uses: spring-io/spring-security-actions/.github/workflows/post-publish.yml
     with:
