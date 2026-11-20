@@ -1,0 +1,26 @@
+name: Release Announcements - Stage
+
+on:
+  push:
+    tags: '**'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to stage
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  stage-release-announcements:
+    name: Stage Release Announcements
+    permissions:
+      actions: write
+      contents: write
+      issues: read
+      pull-requests: read
+    uses: spring-io/spring-security-actions/.github/workflows/release-announcements-stage.yml
+    with:
+      version: ${{ inputs.version || github.ref_name }}
