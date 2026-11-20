@@ -1,94 +1,56 @@
-name: Shared - Release Announcements - Publish
+name: Release Announcements - Publish
 
 on:
   workflow_call:
     inputs:
       version:
-        description: The release to publish
+        description: The version to publish
         required: true
         type: string
     secrets:
-      SPRING_RELEASE_GCHAT_WEBHOOK_URL:
+      actions-token:
+        required: true
+      website-token:
         required: true
 
 permissions:
   contents: read
+concurrency:
+  group: release-publish-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  check-support-window:
-    name: Check Support Window
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - id: support-window
-        name: Compute Support Window
-        uses: spring-io/spring-release-actions/compute-support-window@967a8de4659c4273a82bcb098d73c2330c015254  # 0.0.9
-        with:
-          version: ${{ inputs.version }}
-      - name: Cancel if Repository Doesn't Match Support Window
-        if: steps.support-window.outputs.repository-matches-support-window == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
-        run: |
-          echo "::warning::Cancelling release announcements for $VERSION — $GITHUB_REPOSITORY does not match its support window."
-          gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
-  compute-release:
-    name: Compute Release Coordinates
-    needs: [ check-support-window ]
-    runs-on: ubuntu-latest
-    permissions:
-      issues: read
-    outputs:
-      next-milestone-version: ${{ steps.next-release-milestone.outputs.version }}
-      next-milestone-version-date: ${{ steps.next-release-milestone.outputs.version-date }}
-      next-milestone-version-type: ${{ steps.next-release-milestone.outputs.version-type }}
-    steps:
-      - id: next-release-milestone
-        name: Get Next Release Milestone
-        uses: spring-io/spring-release-actions/compute-next-version@967a8de4659c4273a82bcb098d73c2330c015254  # 0.0.9
-        with:
-          version: ${{ inputs.version }}
-          token: ${{ github.token }}
   deploy-docs:
     name: Deploy Docs
-    needs: [ check-support-window ]
     runs-on: ubuntu-latest
     permissions:
       actions: write
     steps:
       - name: Dispatch Deploy Docs
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: gh workflow run deploy-docs.yml -r docs-build
-  update-milestones:
-    name: Update Milestones
-    needs: [ compute-release, deploy-docs ]
+        uses: $/dispatch-deploy-docs
+  publish-release-notes:
+    name: Publish Release Notes
     runs-on: ubuntu-latest
     permissions:
-      issues: write
+      contents: write
+      issues: read
+      pull-requests: read
     steps:
-      - name: Close Milestone
-        uses: spring-io/spring-release-actions/close-milestone@967a8de4659c4273a82bcb098d73c2330c015254  # 0.0.9
+      - name: Check out the tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          version: ${{ inputs.version }}
-          token: ${{ github.token }}
-      - name: Schedule Next Release (if not already scheduled)
-        uses: spring-io/spring-release-actions/schedule-milestone@967a8de4659c4273a82bcb098d73c2330c015254  # 0.0.9
+          ref: ${{ inputs.version }}
+      - name: Publish Release Notes
+        uses: spring-io/spring-release-actions/publish-release-notes@967a8de4659c4273a82bcb098d73c2330c015254 # 0.0.9
         with:
-          version: ${{ needs.compute-release.outputs.next-milestone-version }}
-          version-type: ${{ needs.compute-release.outputs.next-milestone-version-type }}
-          token: ${{ github.token }}
-  announce:
-    name: Announce Release
-    needs: [ update-milestones ]
+          tag: ${{ inputs.version }}
+  update-learn-page:
+    name: Update Learn Page
     runs-on: ubuntu-latest
-    permissions: {}
     steps:
-      - name: Announce Release on GChat
-        uses: spring-io/spring-release-actions/announce-on-gchat@967a8de4659c4273a82bcb098d73c2330c015254  # 0.0.9
+      - name: Update Learn Page
+        uses: spring-io/spring-release-actions/update-learn-page@967a8de4659c4273a82bcb098d73c2330c015254 # 0.0.9
         with:
+          token: ${{ secrets.actions-token }}
           version: ${{ inputs.version }}
-          gchat-webhook-url: ${{ secrets.SPRING_RELEASE_GCHAT_WEBHOOK_URL }}
+          website-token: ${{ secrets.website-token }}
