@@ -62,3 +62,17 @@ jobs:
       RELEASE_AUTOMATION_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
       GH_WEBSITE_COMMERCIAL_CONTENT_TOKEN: ${{ secrets.GH_WEBSITE_COMMERCIAL_CONTENT_TOKEN }}
       GH_ACTIONS_REPO_TOKEN: ${{ secrets.GH_ACTIONS_REPO_TOKEN }}
+<<#workflow.generator.workflows.release-tools.deploy-schema>>
+  deploy-schema:
+    name: Deploy Schema
+    needs: post-publish
+    if: vars.DEPLOY_SCHEMA == 'true'
+    uses: spring-io/spring-security-actions/.github/workflows/ci-deploy-schema.yml
+    with:
+      java-version: '<< workflow.generator.project.java.versions.primary >>'
+      runner: ${{ vars.UBUNTU_RUNS_ON }}
+    secrets:
+      docs-ssh-key: ${{ secrets.DOCS_SSH_KEY }}
+      docs-username: ${{ secrets.DOCS_USERNAME }}
+      docs-host: ${{ secrets.DOCS_HOST }}
+<</workflow.generator.workflows.release-tools.deploy-schema>>
