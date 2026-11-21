@@ -1,0 +1,14 @@
+name: Test Release
+description: Tests the release train
+runs:
+  using: composite
+  steps:
+    - id: environment
+      name: Compute Build Environment
+      uses: spring-io/spring-security-actions/compute-build-environment
+    - name: Test Release
+      uses: spring-io/spring-security-actions/run-gradle
+      env:
+        ORG_GRADLE_PROJECT_releaseChannel: ${{ steps.environment.outputs.release-channel }}
+      with:
+        gradle-args: build

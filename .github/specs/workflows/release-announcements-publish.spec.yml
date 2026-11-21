@@ -1,0 +1,39 @@
+name: Release Announcements - Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish-release-materials:
+    name: Publish Release Announcements
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+    uses: spring-io/spring-security-actions/.github/workflows/release-announcements-publish.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets:
+      website-token: ${{ secrets.SPRING_RELEASE_GCHAT_WEBHOOK_URL }}
+<<#workflow.generator.workflows.release-tools.deploy-schema>>
+  deploy-schema:
+    name: Deploy Schema
+    needs: publish-release-materials
+    if: vars.DEPLOY_SCHEMA == 'true'
+    uses: spring-io/spring-security-actions/.github/workflows/ci-deploy-schema.yml
+    with:
+      java-version: '<< workflow.generator.project.java.versions.primary >>'
+      runner: ${{ vars.UBUNTU_RUNS_ON }}
+    secrets:
+      docs-ssh-key: ${{ secrets.DOCS_SSH_KEY }}
+      docs-username: ${{ secrets.DOCS_USERNAME }}
+      docs-host: ${{ secrets.DOCS_HOST }}
+<</workflow.generator.workflows.release-tools.deploy-schema>>

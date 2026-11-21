@@ -123,11 +123,15 @@ jobs:
       # reference has no ref. Only that message, for $/<action>, is ignored: the workflows are
       # checked for the rest, and the check above has every $/ name an action of this repository.
       # Remove the -ignore once an actionlint release has the syntax.
+      #
+      # The same goes for a reusable workflow of this repository called with $/<path>.yml: only
+      # that message, for $/.github/workflows/<workflow>.yml, is ignored.
       - name: Lint the workflows
         run: |
           "$RUNNER_TEMP/actionlint" -color \
             -ignore 'unexpected key "queue" for "concurrency" section' \
-            -ignore 'specifying action "\$/[a-z-]+" in invalid format because ref is missing'
+            -ignore 'specifying action "\$/[a-z-]+" in invalid format because ref is missing' \
+            -ignore 'reusable workflow call "\$/\.github/workflows/[a-z-]+\.yml" at "uses" is not following the format'
       - name: Check every action.yml
         run: |
           status=0
