@@ -199,42 +199,21 @@ jobs:
           dry-run: ${{ inputs.dry-run }}
           token: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
 
-  deploy-docs:
-    name: Deploy Docs
+  # A reusable workflow is called by a job, not by a step. It runs after the post-publish job, and
+  # not on a dry run. The permissions are the most that the called jobs ask for: a called workflow
+  # cannot be given more than its caller has.
+  publish-release-materials:
+    name: Publish Release Materials
+    needs: post-publish
     if: ${{ !inputs.dry-run }}
-    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     permissions:
       actions: write
-    steps:
-      - name: Dispatch Deploy Docs
-        uses: $/dispatch-deploy-docs
-
-  publish-release-notes:
-    name: Publish Release Notes
-    if: ${{ !inputs.dry-run }}
-    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
-    permissions:
       contents: write
       issues: read
       pull-requests: read
-    steps:
-      - name: Check out the tag
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.tag }}
-      - name: Publish Release Notes
-        uses: $/publish-release-notes
-        with:
-          tag: ${{ inputs.tag }}
-
-  update-learn-page:
-    name: Update Learn Page
-    if: ${{ !inputs.dry-run }}
-    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
-    steps:
-      - name: Update Learn Page
-        uses: spring-io/spring-release-actions/update-learn-page@967a8de4659c4273a82bcb098d73c2330c015254 # 0.0.9
-        with:
-          token: ${{ secrets.GH_ACTIONS_REPO_TOKEN }}
-          version: ${{ inputs.tag }}
-          website-token: ${{ secrets.GH_WEBSITE_COMMERCIAL_CONTENT_TOKEN }}
+    uses: $/.github/workflows/release-announcements-publish.yml
+    with:
+      version: ${{ inputs.tag }}
+    secrets:
+      actions-token: ${{ secrets.GH_ACTIONS_REPO_TOKEN }}
+      website-token: ${{ secrets.GH_WEBSITE_COMMERCIAL_CONTENT_TOKEN }}
