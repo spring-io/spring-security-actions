@@ -7,7 +7,7 @@ on:
       - "*.x"
       - "embargoed/active/**"
       - "embargoed/frozen/**"
-      - "embarged/lts/**"
+      - "embargoed/lts/**"
   schedule:
     - cron: '17 10 * * *' # Once per day at 10:17am UTC
   workflow_dispatch: # Manual trigger
@@ -84,11 +84,10 @@ jobs:
     secrets:
       artifactory-username: ${{ secrets[needs.setup.outputs.publishing-username] }}
       artifactory-password: ${{ secrets[needs.setup.outputs.publishing-password] }}
-<<#workflow.generator.workflows.release-tools.deploy-schema>>
   deploy-schema:
     name: Deploy Schema
     needs: [ setup, deploy-artifacts ]
-    if: needs.setup.outputs.release-channel == 'oss'
+    if: vars.DEPLOY_SCHEMA == 'true'
     uses: spring-io/spring-security-actions/.github/workflows/ci-deploy-schema.yml
     with:
       java-version: '<< workflow.generator.project.java.versions.primary >>'
@@ -97,4 +96,3 @@ jobs:
       docs-ssh-key: ${{ secrets.DOCS_SSH_KEY }}
       docs-username: ${{ secrets.DOCS_USERNAME }}
       docs-host: ${{ secrets.DOCS_HOST }}
-<</workflow.generator.workflows.release-tools.deploy-schema>>
