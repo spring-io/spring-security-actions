@@ -18,8 +18,9 @@ inputs:
     description: "The artifact repository name (e.g. from compute-artifact-repository)"
     required: true
   artifact-path:
-    description: "The artifact path in the repository (e.g. org/springframework/security/spring-security-core)"
-    required: true
+    description: "The artifact path in the repository (e.g. org/springframework/security/spring-security-core), used to tell whether this version was already deployed. Defaults to the first artifact found for the version in the local repository"
+    required: false
+    default: ""
   local-repository:
     description: "The location of the local repository to deploy"
     required: false
@@ -42,6 +43,25 @@ runs:
         repository: spring-io/spring-security-actions
         ref: ${{ inputs.ref }}
         path: spring-security-actions
+    - id: artifact-path
+      name: Compute Artifact Path
+      if: ${{ !endsWith(inputs.version, '-SNAPSHOT') }}
+      shell: bash
+      env:
+        ARTIFACT_PATH: ${{ inputs.artifact-path }}
+        VERSION: ${{ inputs.version }}
+        LOCAL_REPOSITORY: ${{ inputs.local-repository }}
+      run: |
+        if [ -z "$ARTIFACT_PATH" ]; then
+          pom=$(find "$LOCAL_REPOSITORY" -type f -name '*.pom' -path "*/$VERSION/*" | LC_ALL=C sort | head -n 1)
+          if [ -z "$pom" ]; then
+            echo "::error::No artifact for version $VERSION found in $LOCAL_REPOSITORY to compute the artifact path from"
+            exit 1
+          fi
+          ARTIFACT_PATH=$(dirname "$(dirname "${pom#"${LOCAL_REPOSITORY%/}"/}")")
+        fi
+        echo "Using artifact path $ARTIFACT_PATH"
+        echo "value=$ARTIFACT_PATH" >> "$GITHUB_OUTPUT"
     - id: check-artifact
       name: Check if Artifact Already Deployed
       if: ${{ !endsWith(inputs.version, '-SNAPSHOT') }}
@@ -49,7 +69,7 @@ runs:
       uses: spring-io/spring-release-actions/check-maven-artifact@967a8de4659c4273a82bcb098d73c2330c015254  # 0.0.9
       with:
         repository-url: ${{ inputs.repository-uri }}/${{ inputs.repository-name }}
-        artifact-path: ${{ inputs.artifact-path }}
+        artifact-path: ${{ steps.artifact-path.outputs.value }}
         version: ${{ inputs.version }}
         repository-username: ${{ inputs.username }}
         repository-password: ${{ inputs.password }}

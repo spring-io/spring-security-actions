@@ -46,4 +46,3 @@ jobs:
           repository-name: ${{ steps.artifact-repository.outputs.name }}
           project: ${{ steps.artifact-repository.outputs.project }}
           local-repository: build/publications/repos
-          artifact-path: org/springframework/ldap/spring-ldap-core
