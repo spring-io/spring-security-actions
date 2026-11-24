@@ -1,7 +1,7 @@
 {
 	"generator": {
-		"version": "v0.0.9",
-		"sha256": "b87275fd265e184b708f966b63bcc4f9bcaae00b6c8dbcf5ea3c8f3582f0b419"
+		"version": "v0.0.10",
+		"sha256": "fa4875e3624d7fcb26273890e7f43f3c8fb8eb583ce72ef44afab678e25760de"
 	},
 	"actions": {
 		"actions/cache": { "ref": "v6.1.0", "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" },
