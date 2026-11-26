@@ -16,9 +16,10 @@ runs:
       with:
         java-version: ${{ inputs.java-version }}
         distribution: "temurin"
-        # Write the Gradle cache on main and its embargoed counterparts; elsewhere keep the default of
-        # setup-gradle, which is read-only on every branch except the default one
-        cache-read-only: ${{ (github.ref_name == 'main' || github.ref_name == 'embargoed/frozen/main' || github.ref_name == 'embargoed/active/main') && 'false' || (github.event.repository != null && github.ref_name != github.event.repository.default_branch) }}
+        # Write the Gradle cache on the default branch and on the embargoed LTS branches
+        # The LTS branches write so that Dependabot pull requests, which cannot authenticate to the
+        # Artifactory virtual repositories, can resolve everything unchanged from the cache.
+        cache-read-only: ${{ !startsWith(github.ref_name, 'embargoed/lts/') && github.event.repository != null && github.ref_name != github.event.repository.default_branch }}
     - name: Build with Gradle
       uses: $/run-gradle
       with:
